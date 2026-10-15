@@ -1245,6 +1245,21 @@
         </svg>`;
     }
 
+    // ---- TOCCO SU TELEFONO (Android/Chrome) ----
+    // Chrome ignora touch-action sugli elementi interni di un SVG: toccando
+    // una pedina il browser avviava lo scorrimento della pagina e annullava
+    // il trascinamento (pointercancel). Bloccando il touchstart solo sopra
+    // gli elementi trascinabili, il dito sposta la pedina; sul resto del
+    // campo la pagina continua a scorrere normalmente.
+    function blockTouchScroll(container, selector, isDragging) {
+        container.addEventListener('touchstart', (e) => {
+            if (e.target.closest && e.target.closest(selector)) e.preventDefault();
+        }, { passive: false });
+        container.addEventListener('touchmove', (e) => {
+            if (isDragging()) e.preventDefault();
+        }, { passive: false });
+    }
+
     // ---- CAMPO: RENDER E INTERAZIONE ----
     const pitchWrap = $('pitchWrap');
     let pitchVertical = false;
@@ -1304,6 +1319,7 @@
     }
     pitchWrap.addEventListener('pointerup', endDrag);
     pitchWrap.addEventListener('pointercancel', endDrag);
+    blockTouchScroll(pitchWrap, '.pl', () => !!drag);
     pitchWrap.addEventListener('keydown', (e) => {
         const g = e.target.closest('.pl');
         if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPlayerEditor(+g.dataset.i); }
@@ -1891,6 +1907,7 @@
     }
     spGrid.addEventListener('pointerup', endSpDrag);
     spGrid.addEventListener('pointercancel', endSpDrag);
+    blockTouchScroll(spGrid, '.sp, .sp-ball, .sp-note', () => !!spDrag);
     spGrid.addEventListener('keydown', (e) => {
         const n = e.target.closest('.sp-note');
         if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openNoteEditor(n.dataset.kind); return; }
