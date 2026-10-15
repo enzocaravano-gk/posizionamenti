@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#ffffff" />
-    <title>Posizionamenti Pre-Gara</title>
+    <title>Posizionamenti</title>
     <!-- html2pdf.js 0.10.1 (MIT) incorporata: il PDF funziona anche offline -->
     <script>
 /*! For license information please see html2pdf.bundle.min.js.LICENSE.txt */
@@ -396,7 +396,7 @@
         .sh-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
         .sheet .block-title { font-size: 12px; margin-bottom: 5px; color: #111; }
         .sheet table.grid { font-size: 12px; table-layout: fixed; }
-        .sheet table.grid td { border-color: #555; height: 25px; padding: 0 8px; }
+        .sheet table.grid td { border-color: #555; height: 23px; padding: 0 8px; }
         .sheet table.grid td.n, .sheet table.grid td.lbl { padding: 0 4px; }
         .sheet table.grid col.c-n { width: 40px; }
         .sheet table.grid col.c-lbl { width: 36%; }
@@ -648,7 +648,7 @@
 
     <!-- HEADER -->
     <h1>
-        Posizionamenti Pre-Gara
+        Posizionamenti
         <div class="mode-toggle" id="modeToggle">
             <button type="button" data-mode="11">Calcio a 11</button>
             <button type="button" data-mode="9">Calcio a 9</button>
@@ -760,6 +760,9 @@
             </div>
             <div class="preview-frame">
                 <div class="sheet sp-sheet" id="sheet6"></div>
+            </div>
+            <div class="preview-frame">
+                <div class="sheet sp-sheet" id="sheet7"></div>
             </div>
             <div id="extraFrames"></div>
         </div>
@@ -880,6 +883,8 @@
             cornerFavore: { dx: '', sx: '', copertura: arr(3) },
             punDx: { p1: '', p2: '', linea: arr(c.linea) },
             punSx: { p1: '', p2: '', linea: arr(c.linea) },
+            // punizione centrale: barriera 1°-5° e uomo all'incontro (INC.)
+            punCentrale: { barriera: arr(5), inc: '' },
             note: '',
             // posizioni personalizzate sul campo, per modulo:
             // { '4-4-2': [{ num, lx, dy, name }] }
@@ -1021,6 +1026,13 @@
             cf += `<tr><td class="lbl">${i + 1}°</td><td>${val('cornerFavore.copertura.' + i)}</td></tr>`;
         });
 
+        // PUNIZIONE CENTRALE
+        let pc = '';
+        d.punCentrale.barriera.forEach((_, i) => {
+            pc += `<tr><td class="n">${i + 1}°</td><td>${val('punCentrale.barriera.' + i)}</td></tr>`;
+        });
+        pc += `<tr><td class="n">INC.</td><td>${val('punCentrale.inc')}</td></tr>`;
+
         // PUNIZIONI LATERALI
         const pun = (key) => {
             let h = `<tr><td class="n">1°</td><td>${val(key + '.p1')}</td></tr>
@@ -1044,6 +1056,7 @@
             <div class="${colCls}">
                 <div>${title('CALCI D’ANGOLO CONTRO')}${tbl('lbl', cc)}</div>
                 <div>${title('CALCI D’ANGOLO A FAVORE')}${tbl('lbl', cf)}</div>
+                <div>${title('PUNIZIONE CENTRALE')}${tbl('n', pc)}</div>
                 <div class="note-box"><table class="grid"><tr><td class="sub">NOTE</td></tr></table>${note}</div>
             </div>
             <div class="${colCls}">
@@ -1410,7 +1423,8 @@
         { kind: 'cc', title: 'CALCI D’ANGOLO CONTRO' },
         { kind: 'cf', title: 'CALCI D’ANGOLO A FAVORE' },
         { kind: 'pdx', title: 'PUNIZIONI LATERALI DX' },
-        { kind: 'psx', title: 'PUNIZIONI LATERALI SX' }
+        { kind: 'psx', title: 'PUNIZIONI LATERALI SX' },
+        { kind: 'pc', title: 'PUNIZIONE CENTRALE' }
     ];
     // schemi personalizzati del mister: { id, title, type: 'half' | 'full' }
     const customOf = (kind) => (cur().customSchemes || []).find(c => c.id === kind);
@@ -1437,6 +1451,14 @@
                 add('m' + i, 'M', 'cornerContro.marcatori.' + i + '.b', 33 + (i - (n - 1) / 2) * 8, i % 2 ? 14 : 10.5,
                     { nameUp: true, opp: 'cornerContro.marcatori.' + i + '.a' });
             });
+        } else if (kind === 'pc') {
+            // punizione centrale: pallone a ~24 m, barriera a 9,15 m dal pallone
+            // (affiancata, verso la porta), incontro tra barriera e pallone
+            const n = d.punCentrale.barriera.length;
+            d.punCentrale.barriera.forEach((_, i) => {
+                add('b' + i, (i + 1) + '°', 'punCentrale.barriera.' + i, 34 + (i - (n - 1) / 2) * 2.2, 14.85, { nameUp: true });
+            });
+            add('inc', 'INC', 'punCentrale.inc', 37, 19.5);
         } else if (kind === 'cf') {
             add('dx', 'DX', 'cornerFavore.dx', 65, 3.2);
             add('sx', 'SX', 'cornerFavore.sx', 3, 3.2);
@@ -1495,7 +1517,7 @@
     // posizione fissa del pallone in ogni schema
     // Nelle punizioni il pallone si può trascinare (posizione salvata
     // come gli altri elementi, chiave 'ball'); nei corner è fisso.
-    const ballMovable = (kind) => kind === 'pdx' || kind === 'psx' || !!customOf(kind);
+    const ballMovable = (kind) => kind === 'pdx' || kind === 'psx' || kind === 'pc' || !!customOf(kind);
     function spBalls(kind) {
         if (kind === 'cc') return [[67.4, 0.6]];
         if (kind === 'cf') return [[67.4, 0.6], [0.6, 0.6]];
@@ -1503,6 +1525,7 @@
         if (saved) return [[saved.x, saved.y]];
         const custom = customOf(kind);
         if (custom) return custom.type === 'full' ? [[34, 52.5]] : [[34, 30]];
+        if (kind === 'pc') return [[34, 24]];
         return kind === 'pdx' ? [[60, 22]] : [[8, 22]];
     }
 
@@ -1536,6 +1559,9 @@
         // corner a favore: zoom sull'area, proporzioni reali
         cf: { mx: { b: [7, 61], f: [1] }, my: { b: [-4, 37], f: [1] } },
         // punizioni: area di rigore ingrandita (×1,3), il resto compresso
+        // punizione centrale: metà campo con area di rigore ingrandita (×1,3)
+        pc: { mx: { b: [8, 13.84, 54.16, 60], f: [0.5, 1.3, 0.5] },
+              my: { b: [-3.5, 0, 16.5, 35], f: [1.2, 1.3, 0.7] } },
         pdx: { mx: { b: [-3, 13.84, 54.16, 71], f: [0.6, 1.3, 0.6] },
                my: { b: [-4.5, 0, 16.5, 38], f: [1, 1.3, 0.7] } },
         psx: { mx: { b: [-3, 13.84, 54.16, 71], f: [0.6, 1.3, 0.6] },
@@ -1650,7 +1676,9 @@
         const boxOf = (it, c, w) => {
             const x = it.ex + c.tx, y = it.ey + c.ty;
             const l = c.anchor === 'start' ? x : c.anchor === 'end' ? x - w : x - w / 2;
-            return { l, r: l + w, t: y - fn * 0.8, b: y + fn * 0.22 };
+            // piccolo margine: i nomi devono restare staccati, non solo non sovrapposti
+            const m = fn * 0.3;
+            return { l: l - m, r: l + w + m, t: y - fn * 0.8, b: y + fn * 0.22 };
         };
         const overlap = (a, b) =>
             Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
@@ -1724,7 +1752,7 @@
         });
         const labels = placeLabels(items, r, fn, V, ballPts);
         const els = items.map(({ el, name, ex, ey }, i) => {
-            const lbSize = el.label.length > 1 ? 1.7 : 2.1;
+            const lbSize = el.label.length > 2 ? 1.3 : el.label.length > 1 ? 1.7 : 2.1;
             const L = labels[i];
             const pos = `translate(${ex.toFixed(2)},${ey.toFixed(2)})`;
             const lbY = (lbSize * 0.36).toFixed(2);
@@ -1817,7 +1845,7 @@
     const spGrid = $('spGrid');
     // Sul telefono gli schemi restano larghi almeno 560-600 px e si scorrono
     // di lato, altrimenti pallini e nomi si sovrapporrebbero.
-    const SP_MIN_WIDTH = { cc: 560, cf: 560, pdx: 600, psx: 600, half: 600, full: 600 };
+    const SP_MIN_WIDTH = { cc: 560, cf: 560, pdx: 600, psx: 600, pc: 560, half: 600, full: 600 };
     let spGridWidth = 0;
     function renderSetPieces() {
         spGridWidth = spGrid.clientWidth || 340;
@@ -2088,7 +2116,7 @@
     }
 
     function buildSheet() {
-        sheet.innerHTML = sheetHead('POSIZIONAMENTI PRE-GARA') + `<div class="sh-board">${buildBoard(false)}</div>`;
+        sheet.innerHTML = sheetHead('POSIZIONAMENTI') + `<div class="sh-board">${buildBoard(false)}</div>`;
 
         // Pagina 2: campo stampabile (solo linee nere) + panchina
         const d = cur();
@@ -2105,7 +2133,7 @@
                 </aside>
             </div>`;
 
-        // Pagine 3-6: palle inattive, uno schema per pagina (solo linee nere)
+        // Pagine 3-7: palle inattive, uno schema per pagina (solo linee nere)
         SP_BASE.forEach((k, i) => {
             $('sheet' + (i + 3)).innerHTML = sheetHead(k.title) +
                 `<div class="sh-sp">${spSVG(k.kind, true)}</div>`;
@@ -2181,7 +2209,7 @@
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
             pagebreak: { mode: ['avoid-all'] }
         };
-        // Per ogni foglio successivo al primo (6 fissi + schemi personalizzati)
+        // Per ogni foglio successivo al primo (7 fissi + schemi personalizzati)
         // si aggiunge una pagina A4 orizzontale e lo si cattura.
         let worker = html2pdf().set(opt).from(sheet).toPdf();
         [...scaler.querySelectorAll('.sheet')].slice(1).forEach(sh => {
