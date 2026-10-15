@@ -1604,14 +1604,77 @@
         let scale, markerPx, namePx;
         if (print) {
             scale = Math.min(SP_PRINT_BOX.w / V.vb.w, SP_PRINT_BOX.h / V.vb.h);   // px per metro
-            markerPx = 20; namePx = 20;
+            markerPx = 18; namePx = 15;
         } else {
             scale = appWidth / V.vb.w;
             // dal telefono (≈340 px) al computer (≈900 px) pallini e nomi crescono
             const t = Math.max(0, Math.min(1, (appWidth - 340) / 560));
-            markerPx = 14 + 5 * t; namePx = 13 + 4 * t;
+            markerPx = 14 + 4 * t; namePx = 11 + 3 * t;
         }
         return { ...V, w, h, scale, kc: markerPx / (1.9 * scale), fn: namePx / scale, px: (n) => n / scale };
+    }
+
+    // ---- NOMI SENZA SOVRAPPOSIZIONI ----
+    // Per ogni pedina si provano più posizioni del nome (quella abituale,
+    // il lato opposto, destra, sinistra, poi le diagonali) e si sceglie la
+    // prima che non tocca altri nomi, altre pedine o il pallone e resta
+    // dentro lo schema; se nessuna è libera, quella che si sovrappone meno.
+    // La larghezza del nome è misurata con lo stesso font del disegno.
+    let measureCtx = null;
+    function textWidthPx(text, px) {
+        if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+        measureCtx.font = `700 ${px}px Helvetica, Arial, sans-serif`;
+        return measureCtx.measureText(text).width;
+    }
+    function placeLabels(items, r, fn, V, obstacles) {
+        const B = V.vb;
+        const gap = fn * 0.25;
+        const circles = items.map(it => ({ x: it.ex, y: it.ey, r }));
+        const placed = [];                       // riquadri dei nomi già posizionati
+        const boxOf = (it, c, w) => {
+            const x = it.ex + c.tx, y = it.ey + c.ty;
+            const l = c.anchor === 'start' ? x : c.anchor === 'end' ? x - w : x - w / 2;
+            return { l, r: l + w, t: y - fn * 0.8, b: y + fn * 0.22 };
+        };
+        const overlap = (a, b) =>
+            Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
+        const hitsCircle = (bx, c) => {
+            const nx = Math.max(bx.l, Math.min(c.x, bx.r)), ny = Math.max(bx.t, Math.min(c.y, bx.b));
+            return (nx - c.x) ** 2 + (ny - c.y) ** 2 < (c.r + gap * 0.5) ** 2;
+        };
+        return items.map((it, i) => {
+            const below = { anchor: 'middle', tx: 0, ty: r + gap + fn * 0.78 };
+            const above = { anchor: 'middle', tx: 0, ty: -(r + gap + fn * 0.22) };
+            const right = { anchor: 'start', tx: r + gap, ty: fn * 0.3 };
+            const left = { anchor: 'end', tx: -(r + gap), ty: fn * 0.3 };
+            const d = r * 0.75;
+            const diag = [
+                { anchor: 'start', tx: d, ty: r + gap + fn * 0.6 },      // sotto a destra
+                { anchor: 'end', tx: -d, ty: r + gap + fn * 0.6 },       // sotto a sinistra
+                { anchor: 'start', tx: d, ty: -(r + gap) },              // sopra a destra
+                { anchor: 'end', tx: -d, ty: -(r + gap) }                // sopra a sinistra
+            ];
+            const el = it.el;
+            let cands = el.nameSide ? [right, below, above, left] : el.nameUp ? [above, below, right, left] : [below, above, right, left];
+            cands = cands.concat(diag);
+            if (!it.name) return cands[0];
+            const w = textWidthPx(it.name, fn * V.scale) / V.scale;
+            let best = null, bestCost = Infinity;
+            cands.forEach((c, k) => {
+                const bx = boxOf(it, c, w);
+                let cost = 0;
+                placed.forEach(p => { cost += overlap(bx, p) * 10; });
+                circles.forEach((cc, j) => { if (j !== i && hitsCircle(bx, cc)) cost += fn * fn * 4; });
+                obstacles.forEach(o => { if (hitsCircle(bx, o)) cost += fn * fn * 2; });
+                // fuori dallo schema: si taglierebbe
+                const out = Math.max(0, B.x - bx.l) + Math.max(0, bx.r - (B.x + B.w)) + Math.max(0, B.y - bx.t) + Math.max(0, bx.b - (B.y + B.h));
+                cost += out * fn * 20;
+                cost += k * 0.001;                // a parità, vince l'ordine di preferenza
+                if (cost < bestCost) { bestCost = cost; best = { c, bx }; }
+            });
+            placed.push(best.bx);
+            return best.c;
+        });
     }
 
     function spSVG(kind, print, appWidth) {
@@ -1631,19 +1694,25 @@
             }
             return `<g transform="translate(${x.toFixed(2)},${y.toFixed(2)})">${ball}</g>`;
         }).join('');
-        const els = spElements(kind).map(el => {
+        const r = 1.9 * V.kc, fn = V.fn;
+        // posizioni sullo schema di tutte le pedine, poi si sceglie dove
+        // scrivere ogni nome (placeLabels) e infine si disegna
+        const items = spElements(kind).map(el => {
             const name = el.piece ? el.name : (getPath(d, el.path) || '');
-            const lbSize = el.label.length > 1 ? 1.7 : 2.1;
-            const r = 1.9 * V.kc, fn = V.fn;
-            // vicino alle linee laterali il nome si allinea verso l'interno
-            let anchor = V.rot ? 'middle' : el.x > 60 ? 'end' : el.x < 8 ? 'start' : 'middle';
-            let tx = anchor === 'end' ? r : anchor === 'start' ? -r : 0;
-            let ty = el.nameUp ? -(r + 0.5) : r + fn * 0.95;
-            if (el.nameSide) { anchor = 'start'; tx = r + 0.5; ty = fn * 0.35; }
             const [ex, ey] = V.T(clampX(V.mx.fwd(el.x), r + 0.3), V.my.fwd(el.y));
+            return { el, name, ex, ey };
+        });
+        const ballPts = spBalls(kind).map(([bx, by]) => {
+            const [x, y] = V.T(clampX(V.mx.fwd(bx), ballR + lineW), V.my.fwd(by));
+            return { x, y, r: ballR };
+        });
+        const labels = placeLabels(items, r, fn, V, ballPts);
+        const els = items.map(({ el, name, ex, ey }, i) => {
+            const lbSize = el.label.length > 1 ? 1.7 : 2.1;
+            const L = labels[i];
             const pos = `translate(${ex.toFixed(2)},${ey.toFixed(2)})`;
             const lbY = (lbSize * 0.36).toFixed(2);
-            const nameAttrs = `x="${tx.toFixed(2)}" y="${ty.toFixed(2)}" text-anchor="${anchor}" font-size="${fn.toFixed(2)}"`;
+            const nameAttrs = `x="${L.tx.toFixed(2)}" y="${L.ty.toFixed(2)}" text-anchor="${L.anchor}" font-size="${fn.toFixed(2)}"`;
             if (print) {
                 return `<g transform="${pos}">
                     <g transform="scale(${V.kc})">
@@ -1651,7 +1720,7 @@
                         ${el.piece ? `<circle r="1.55" fill="none" stroke="#111" stroke-width="${(lineW * 0.7 / V.kc).toFixed(3)}"/>` : ''}
                         <text y="${lbY}" text-anchor="middle" font-size="${lbSize}" font-weight="700" fill="#111">${esc(el.label)}</text>
                     </g>
-                    <text ${nameAttrs} font-weight="700" fill="#111" stroke="#fff" stroke-width="${V.px(4).toFixed(3)}" paint-order="stroke" stroke-linejoin="round">${esc(name)}</text>
+                    <text ${nameAttrs} font-weight="700" fill="#111" stroke="#fff" stroke-width="${V.px(3).toFixed(3)}" paint-order="stroke" stroke-linejoin="round">${esc(name)}</text>
                 </g>`;
             }
             return `<g class="sp${el.piece ? ' piece' : ''}" data-kind="${kind}" data-key="${el.key}" tabindex="0" role="button" aria-label="${esc(el.label)} ${esc(name)}" transform="${pos}">
@@ -1659,7 +1728,7 @@
                     <circle r="1.9" style="stroke-width:${(V.px(2) / V.kc).toFixed(3)}"/>
                     <text class="lb" y="${lbY}" text-anchor="middle" font-size="${lbSize}">${esc(el.label)}</text>
                 </g>
-                <text class="name" ${nameAttrs} style="stroke-width:${V.px(4).toFixed(3)}">${esc(name)}</text>
+                <text class="name" ${nameAttrs} style="stroke-width:${V.px(3).toFixed(3)}">${esc(name)}</text>
             </g>`;
         }).join('');
         // clipPath esplicito: le linee fuori inquadratura non devono sbordare
