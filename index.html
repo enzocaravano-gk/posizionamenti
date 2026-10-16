@@ -575,6 +575,44 @@
         }
         .pl-card input:focus { outline: none; border-color: var(--accent); }
         .pl-card .row-btns { display: flex; gap: 10px; }
+
+        /* ---- ROSTER ---- */
+        .roster-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 18px; }
+        .roster-bar .btn { padding: 9px 20px; font-size: 14px; }
+        .pl-card.roster-card {
+            max-width: 560px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
+            display: flex; flex-direction: column; padding: 18px 18px 16px;
+        }
+        .roster-card h3 { margin-bottom: 6px; }
+        .roster-help { font-size: 13px; color: #666; line-height: 1.4; margin-bottom: 12px; }
+        .roster-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .roster-tools .btn, .roster-card .row-btns .btn, .roster-confirm .btn { padding: 9px 14px; font-size: 14px; min-height: 0; }
+        .roster-paste, .roster-confirm {
+            background: #f6f6f6; border-radius: 12px; padding: 10px; margin-bottom: 12px;
+        }
+        .roster-paste textarea { min-height: 110px; font-size: 15px; margin-bottom: 8px; }
+        .roster-paste .row-btns, .roster-confirm .row-btns { flex-wrap: wrap; }
+        .roster-confirm p { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+        .roster-list { flex: 1; min-height: 120px; overflow-y: auto; border: 1px solid #e3e3e3; border-radius: 12px; margin-bottom: 10px; }
+        .roster-list .r-row { display: grid; grid-template-columns: 58px 1fr 92px 36px; border-bottom: 1px solid #eee; }
+        .roster-list .r-row:last-child { border-bottom: none; }
+        .roster-list .r-head { position: sticky; top: 0; background: #faf6f6; z-index: 1; font-size: 11px; font-weight: 800; color: var(--accent); text-transform: uppercase; }
+        .roster-list .r-head span { padding: 7px 10px; }
+        .roster-card .roster-list input {
+            border: none; border-radius: 0; padding: 9px 10px; font-size: 15px; background: transparent; min-width: 0;
+        }
+        .roster-card .roster-list input:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: #fffdf8; }
+        .roster-list input.r-num { text-align: center; font-weight: 700; }
+        .roster-list input.dup { color: #c00; background: #fff0f0; }
+        .roster-list .r-del { border: none; background: none; color: #aaa; font-size: 18px; cursor: pointer; }
+        .roster-list .r-del:hover { color: #c00; }
+        .roster-empty { padding: 22px 14px; text-align: center; color: #888; font-size: 14px; }
+        .roster-add { align-self: flex-start; margin-bottom: 12px; border: none; background: none; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; padding: 4px 2px; }
+        .roster-card .row-btns { justify-content: space-between; }
+        @media (max-width: 480px) {
+            .roster-list .r-row { grid-template-columns: 50px 1fr 64px 32px; }
+            .roster-tools .btn { flex: 1 1 calc(50% - 4px); }
+        }
         .field-choice { display: flex; gap: 12px; margin-bottom: 18px; }
         .field-choice button {
             flex: 1;
@@ -738,6 +776,10 @@
     </div>
 
     <!-- POSIZIONAMENTI -->
+    <div class="roster-bar">
+        <button type="button" class="btn btn-outline" id="rosterBtn">👥 Roster squadra</button>
+        <span class="text-muted" id="rosterInfo"></span>
+    </div>
     <div class="board" id="board"></div>
     <div class="kbd-hint">
         <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> / <kbd>Invio</kbd> per spostarsi ·
@@ -745,6 +787,7 @@
         <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>C</kbd> copia, <kbd>V</kbd> incolla · <kbd>Canc</kbd> svuota la selezione
     </div>
     <datalist id="playersList"></datalist>
+    <datalist id="rosterList"></datalist>
 
     <!-- CAMPO -->
     <div class="pitch-section">
@@ -850,6 +893,42 @@
     </div>
 </div>
 
+<!-- ROSTER SQUADRA -->
+<div class="pl-editor" id="rosterModal" aria-hidden="true">
+    <div class="pl-card roster-card" role="dialog" aria-labelledby="rosterTitle">
+        <h3 id="rosterTitle">👥 Roster squadra</h3>
+        <p class="roster-help">I giocatori del roster compaiono nell'elenco quando compili le tabelle e, scegliendo un nome nella Formazione, il numero di maglia si mette da solo. Il roster resta salvato su questo dispositivo: esportalo per averne una copia o per passarlo ai collaboratori.</p>
+        <div class="roster-tools">
+            <button type="button" class="btn btn-outline" id="rosterImportBtn">📂 Importa file</button>
+            <button type="button" class="btn btn-outline" id="rosterPasteBtn">📋 Incolla elenco</button>
+            <button type="button" class="btn btn-outline" id="rosterExportBtn">💾 Esporta</button>
+            <button type="button" class="btn btn-outline" id="rosterShareBtn" hidden>📤 Condividi</button>
+            <input type="file" id="rosterFile" accept=".csv,.txt,.json,text/csv,text/plain,application/json" hidden />
+        </div>
+        <div class="roster-paste" id="rosterPaste" hidden>
+            <textarea id="rosterPasteText" placeholder="Un giocatore per riga, ad esempio:&#10;1 Rossi&#10;7 Bianchi Marco&#10;10 Verdi (A)"></textarea>
+            <div class="row-btns">
+                <button type="button" class="btn btn-primary" id="rosterPasteOk">Leggi elenco</button>
+                <button type="button" class="btn btn-outline" id="rosterPasteCancel">Annulla</button>
+            </div>
+        </div>
+        <div class="roster-confirm" id="rosterConfirm" hidden>
+            <p id="rosterConfirmText"></p>
+            <div class="row-btns">
+                <button type="button" class="btn btn-primary" id="rosterReplace">Sostituisci roster</button>
+                <button type="button" class="btn btn-outline" id="rosterMerge">Aggiungi</button>
+                <button type="button" class="btn btn-outline" id="rosterImportCancel">Annulla</button>
+            </div>
+        </div>
+        <div class="roster-list" id="rosterRows"></div>
+        <button type="button" class="roster-add" id="rosterAddBtn">＋ Aggiungi giocatore</button>
+        <div class="row-btns">
+            <button type="button" class="btn btn-outline" id="rosterClearBtn">🗑 Svuota</button>
+            <button type="button" class="btn btn-primary" id="rosterDoneBtn">Fatto</button>
+        </div>
+    </div>
+</div>
+
 <!-- POPUP GIOCATORE -->
 <div class="pl-editor" id="plEditor" aria-hidden="true">
     <form class="pl-card" id="plForm" autocomplete="off">
@@ -886,6 +965,17 @@
                 formations: ['3-3-2', '3-2-3', '3-4-1', '2-3-3', '3-1-3-1'] }
     };
     const STORAGE_KEY = 'posizionamentiState';
+    // Roster della squadra: unico per calcio a 11 e a 9, salvato a parte
+    // così "Pulisci" e "Reset" della scheda non lo cancellano.
+    const ROSTER_KEY = 'posizionamentiRoster';
+    let roster = [];
+    try {
+        const r = JSON.parse(localStorage.getItem(ROSTER_KEY) || '[]');
+        if (Array.isArray(r)) roster = r.map(p => ({ num: String(p.num || ''), name: String(p.name || ''), role: String(p.role || '') }));
+    } catch (_) {}
+    function saveRoster() {
+        try { localStorage.setItem(ROSTER_KEY, JSON.stringify(roster)); } catch (_) {}
+    }
 
     // ---- POSIZIONI SUL CAMPO PER MODULO ----
     // [numero, laterale, profondità]: laterale 0 = fascia sinistra,
@@ -1052,6 +1142,13 @@
                 ? `<input type="text" data-path="${path}" value="${esc(v)}" placeholder="${esc(ph || '')}" autocomplete="off"/>`
                 : `<span class="v">${esc(v)}</span>`;
         };
+        // celle nome della Formazione: suggerimenti dal roster
+        const rost = (path, ph) => {
+            const v = getPath(d, path);
+            return editable
+                ? `<input type="text" data-path="${path}" value="${esc(v)}" placeholder="${esc(ph || '')}" list="rosterList" autocomplete="off"/>`
+                : `<span class="v">${esc(v)}</span>`;
+        };
         const title = (t) => `<div class="block-title">${t}</div>`;
         // colgroup esplicito: con table-layout fisso le larghezze verrebbero
         // prese dalla prima riga, che a volte è un'intestazione su 2 colonne.
@@ -1060,13 +1157,13 @@
         // FORMAZIONE
         let form = '';
         for (let i = 0; i < c.starters; i++) {
-            form += `<tr><td class="n">${plain('starterNums.' + i, editable ? '—' : '')}</td><td>${plain('starters.' + i, editable ? 'Titolare' : '')}</td></tr>`;
+            form += `<tr><td class="n">${plain('starterNums.' + i, editable ? '—' : '')}</td><td>${rost('starters.' + i, editable ? 'Titolare' : '')}</td></tr>`;
         }
         form += `<tr><td class="sub" colspan="2">PANCHINA</td></tr>`;
         for (let i = 0; i < c.bench; i++) {
-            form += `<tr><td class="n">${plain('benchNums.' + i, editable ? '—' : '')}</td><td>${plain('bench.' + i, editable ? 'Riserva' : '')}</td></tr>`;
+            form += `<tr><td class="n">${plain('benchNums.' + i, editable ? '—' : '')}</td><td>${rost('bench.' + i, editable ? 'Riserva' : '')}</td></tr>`;
         }
-        form += `<tr><td class="n">${plain('extraNum', editable ? '—' : '')}</td><td>${plain('extra', editable ? 'Altro / staff' : '')}</td></tr>`;
+        form += `<tr><td class="n">${plain('extraNum', editable ? '—' : '')}</td><td>${rost('extra', editable ? 'Altro / staff' : '')}</td></tr>`;
 
         // CALCI D'ANGOLO CONTRO
         let cc = `<tr><td class="lbl">PALO</td><td>${val('cornerContro.palo')}</td></tr>
@@ -1125,10 +1222,22 @@
             </div>`;
     }
 
+    // Elenchi dei nomi che compaiono toccando una cella:
+    // - palle inattive / campo: prima i convocati, poi il resto del roster
+    // - Formazione: i giocatori del roster non ancora inseriti
     function updatePlayersList() {
         const d = cur();
         const names = [...d.starters, ...d.bench, d.extra].map(s => s.trim()).filter(Boolean);
-        playersList.innerHTML = [...new Set(names)].map(n => `<option value="${esc(n)}"></option>`).join('');
+        const used = new Set(names.map(n => n.toLowerCase()));
+        const rosterNames = roster.map(p => p.name.trim()).filter(Boolean);
+        const optLabel = (p) => [p.num && 'n° ' + p.num, p.role].filter(Boolean).join(' · ');
+        playersList.innerHTML = [...new Set(names.concat(rosterNames.filter(n => !used.has(n.toLowerCase()))))]
+            .map(n => `<option value="${esc(n)}"></option>`).join('');
+        $('rosterList').innerHTML = roster.filter(p => p.name.trim() && !used.has(p.name.trim().toLowerCase()))
+            .map(p => `<option value="${esc(p.name.trim())}" label="${esc(optLabel(p))}"></option>`).join('');
+        $('rosterInfo').textContent = roster.length
+            ? `${roster.length} giocatori nel roster · i nomi compaiono toccando le celle`
+            : 'Crea la rosa una volta sola: poi scegli i nomi dall’elenco';
     }
 
     function updateStatus() {
@@ -1180,6 +1289,273 @@
     });
     board.addEventListener('change', (e) => {
         if (e.target.dataset.path && isNum(e.target)) commitInputs([e.target]);
+        else applyRosterNumber(e.target);
+    });
+
+    // Nome scelto nella Formazione che è nel roster: la riga prende il suo
+    // numero di maglia (con la regola dello scambio, niente doppioni).
+    function applyRosterNumber(inp) {
+        const m = /^(starters|bench)\.(\d+)$|^extra$/.exec(inp.dataset.path || '');
+        if (!m) return;
+        const name = inp.value.trim().toLowerCase();
+        const p = name && roster.find(r => r.name.trim().toLowerCase() === name);
+        if (!p) return;
+        // nome scritto come nel roster (maiuscole comprese)
+        if (inp.value !== p.name.trim()) {
+            inp.value = p.name.trim();
+            commitInputs([inp]);
+        }
+        if (!p.num.trim()) return;
+        const numPath = m[1] ? (m[1] === 'starters' ? 'starterNums.' : 'benchNums.') + m[2] : 'extraNum';
+        if (String(getPath(cur(), numPath) || '').trim() === p.num.trim()) return;
+        const numInp = board.querySelector(`[data-path="${numPath}"]`);
+        if (!numInp) return;
+        numInp.value = p.num.trim();
+        const oldNum = String(getPath(cur(), numPath) || '').trim();
+        const stamp = toastStamp;
+        commitInputs([numInp]);
+        const swapped = stamp !== toastStamp;   // c'è stato uno scambio di numeri
+        showToast(`${inp.value.trim()}: maglia n° ${p.num.trim()}` +
+            (swapped ? (oldNum ? ` · chi aveva il ${p.num.trim()} ora ha il ${oldNum}` : '') : ''));
+    }
+
+    // ---- ROSTER: FINESTRA ----
+    const rosterModal = $('rosterModal');
+    function openRoster() {
+        renderRosterRows();
+        $('rosterPaste').hidden = true;
+        $('rosterConfirm').hidden = true;
+        rosterModal.classList.add('open');
+        rosterModal.setAttribute('aria-hidden', 'false');
+    }
+    function closeRoster() {
+        // ordinato per numero di maglia (chi non ha numero in fondo)
+        roster = roster.filter(p => p.name.trim() || p.num.trim());
+        roster.sort((a, b) => (parseInt(a.num, 10) || 999) - (parseInt(b.num, 10) || 999) || a.name.localeCompare(b.name));
+        saveRoster();
+        rosterModal.classList.remove('open');
+        rosterModal.setAttribute('aria-hidden', 'true');
+        updatePlayersList();
+    }
+    function renderRosterRows() {
+        const nums = roster.map(p => p.num.trim()).filter(Boolean);
+        const dup = new Set(nums.filter((n, i) => nums.indexOf(n) !== i));
+        $('rosterRows').innerHTML = `<div class="r-row r-head"><span>N°</span><span>Nome</span><span>Ruolo</span><span></span></div>` +
+            (roster.length ? roster.map((p, i) => `<div class="r-row">
+                <input class="r-num${dup.has(p.num.trim()) ? ' dup' : ''}" data-i="${i}" data-f="num" value="${esc(p.num)}" inputmode="numeric" maxlength="3" aria-label="Numero"/>
+                <input data-i="${i}" data-f="name" value="${esc(p.name)}" placeholder="Nome" aria-label="Nome"/>
+                <input data-i="${i}" data-f="role" value="${esc(p.role)}" placeholder="—" aria-label="Ruolo"/>
+                <button type="button" class="r-del" data-del="${i}" aria-label="Elimina">✕</button>
+            </div>`).join('')
+            : `<div class="roster-empty">Nessun giocatore. Importa un file, incolla un elenco o aggiungili uno per uno.</div>`);
+        $('rosterTitle').textContent = `👥 Roster squadra${roster.length ? ' · ' + roster.length : ''}`;
+    }
+    $('rosterBtn').addEventListener('click', openRoster);
+    $('rosterDoneBtn').addEventListener('click', closeRoster);
+    rosterModal.addEventListener('click', (e) => { if (e.target === rosterModal) closeRoster(); });
+    $('rosterRows').addEventListener('input', (e) => {
+        const i = +e.target.dataset.i, f = e.target.dataset.f;
+        if (!roster[i] || !f) return;
+        roster[i][f] = e.target.value;
+        saveRoster();
+        if (f === 'num') {
+            const nums = roster.map(p => p.num.trim()).filter(Boolean);
+            const dup = new Set(nums.filter((n, k) => nums.indexOf(n) !== k));
+            $('rosterRows').querySelectorAll('.r-num').forEach(el => el.classList.toggle('dup', dup.has(el.value.trim())));
+        }
+    });
+    $('rosterRows').addEventListener('click', (e) => {
+        const i = e.target.dataset.del;
+        if (i == null) return;
+        roster.splice(+i, 1);
+        saveRoster();
+        renderRosterRows();
+    });
+    $('rosterAddBtn').addEventListener('click', () => {
+        roster.push({ num: '', name: '', role: '' });
+        renderRosterRows();
+        const rows = $('rosterRows').querySelectorAll('.r-num');
+        const last = rows[rows.length - 1];
+        last.scrollIntoView({ block: 'nearest' });
+        last.focus();
+    });
+    $('rosterClearBtn').addEventListener('click', () => {
+        if (!roster.length || !confirm('Svuotare il roster? I nomi già inseriti nelle tabelle restano.')) return;
+        roster = [];
+        saveRoster();
+        renderRosterRows();
+    });
+
+    // ---- ROSTER: LETTURA DI FILE ED ELENCHI ----
+    // Accetta il file esportato dall'app (CSV), CSV/TSV da Excel, Numbers
+    // o Fogli Google, testo semplice ("7 Rossi", "Rossi 7", "Rossi (D)")
+    // e il JSON. Il numero è una cifra da 1 a 3 caratteri.
+    const ROLE_RE = /^(p|d|c|a|por|dif|cen|att|portiere|difensore|centrocampista|attaccante|terzino|centrale|esterno|mediano|regista|mezzala|trequartista|ala|punta)$/i;
+    function splitCsv(line, sep) {
+        const out = [];
+        let cur = '', q = false;
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (q) {
+                if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+                else if (ch === '"') q = false;
+                else cur += ch;
+            } else if (ch === '"') q = true;
+            else if (ch === sep) { out.push(cur); cur = ''; }
+            else cur += ch;
+        }
+        out.push(cur);
+        return out.map(c => c.trim());
+    }
+    function parseRoster(text) {
+        text = String(text || '').replace(/^\uFEFF/, '').trim();
+        if (!text) return [];
+        try {
+            const j = JSON.parse(text);
+            const arr = Array.isArray(j) ? j : (j && j.players);
+            if (Array.isArray(arr)) {
+                return arr.map(p => typeof p === 'string' ? { num: '', name: p.trim(), role: '' } : {
+                    num: String(p.num ?? p.numero ?? '').trim(),
+                    name: String(p.name ?? p.nome ?? '').trim(),
+                    role: String(p.role ?? p.ruolo ?? '').trim()
+                }).filter(p => p.name);
+            }
+        } catch (_) {}
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const sepOf = (l) => l.includes('\t') ? '\t' : l.includes(';') ? ';' : l.includes(',') ? ',' : null;
+        const isNumTok = (t) => /^\d{1,3}$/.test(t);
+        const out = [];
+        let cols = null;   // colonne dell'intestazione, se c'è
+        lines.forEach((line) => {
+            const sep = sepOf(line);
+            if (sep) {
+                const cells = splitCsv(line, sep);
+                const HEAD = /^(n|n°|nr|num|numero|maglia|#|nome|cognome|giocatore|nominativo|name|surname|ruolo|role|posizione)\.?$/i;
+                if (!cells.some(isNumTok) && cells.filter(Boolean).length && cells.filter(Boolean).every(c => HEAD.test(c))) {
+                    cols = { num: -1, role: -1, name: [] };
+                    cells.forEach((c, i) => {
+                        if (/^(n|n°|nr|num|numero|maglia|#)\.?$/i.test(c)) cols.num = i;
+                        else if (/^(ruolo|role|posizione)$/i.test(c)) cols.role = i;
+                        else if (/^(nome|cognome|giocatore|name|surname|nominativo)$/i.test(c)) cols.name.push(i);
+                    });
+                    return;
+                }
+                if (cols && cols.name.length) {
+                    out.push({
+                        num: cols.num >= 0 ? (cells[cols.num] || '') : '',
+                        name: cols.name.map(i => cells[i] || '').filter(Boolean).join(' '),
+                        role: cols.role >= 0 ? (cells[cols.role] || '') : ''
+                    });
+                    return;
+                }
+                const rest = cells.filter(Boolean);
+                const ni = rest.findIndex(isNumTok);
+                const num = ni >= 0 ? rest.splice(ni, 1)[0] : '';
+                const ri = rest.length > 1 ? rest.findIndex(t => ROLE_RE.test(t)) : -1;
+                const role = ri >= 0 ? rest.splice(ri, 1)[0] : '';
+                out.push({ num, name: rest.join(' '), role });
+                return;
+            }
+            // riga di testo: elenco puntato, "7 Rossi", "7. Rossi", "Rossi 7", "Rossi (D)"
+            let t = line.replace(/^[-•*·–]\s*/, '');
+            let role = '';
+            const rm = /\s*\(([^)]{1,20})\)\s*$/.exec(t);
+            if (rm && !isNumTok(rm[1].trim())) { role = rm[1].trim(); t = t.slice(0, rm.index); }
+            let num = '';
+            let m = /^#?(\d{1,3})[\s.)\-–:]+(.+)$/.exec(t);
+            if (m) { num = m[1]; t = m[2]; }
+            else if ((m = /^(.+?)[\s\-–:(#]+(\d{1,3})\)?$/.exec(t))) { t = m[1]; num = m[2]; }
+            out.push({ num, name: t.trim(), role });
+        });
+        return out.filter(p => p.name && !/^(nome|cognome|giocatore|name|ruolo|numero)$/i.test(p.name));
+    }
+
+    let pendingImport = null;
+    function proposeImport(list, source) {
+        if (!list.length) {
+            alert('Non ho trovato giocatori ' + source + '. Serve un giocatore per riga, ad esempio "7 Rossi".');
+            return;
+        }
+        $('rosterPaste').hidden = true;
+        if (!roster.length) { applyImport(list, true); return; }
+        pendingImport = list;
+        $('rosterConfirmText').textContent = `Trovati ${list.length} giocatori. Il roster ne ha già ${roster.length}: vuoi sostituirlo o aggiungere quelli nuovi?`;
+        $('rosterConfirm').hidden = false;
+    }
+    function applyImport(list, replace) {
+        if (replace) roster = [];
+        list.forEach(p => {
+            const ex = roster.find(r => r.name.trim().toLowerCase() === p.name.trim().toLowerCase());
+            if (ex) {
+                if (p.num) ex.num = p.num;
+                if (p.role) ex.role = p.role;
+            } else roster.push({ num: p.num || '', name: p.name, role: p.role || '' });
+        });
+        roster.sort((a, b) => (parseInt(a.num, 10) || 999) - (parseInt(b.num, 10) || 999) || a.name.localeCompare(b.name));
+        saveRoster();
+        pendingImport = null;
+        $('rosterConfirm').hidden = true;
+        renderRosterRows();
+        updatePlayersList();
+        showToast(`Roster: ${roster.length} giocatori`);
+    }
+    $('rosterReplace').addEventListener('click', () => pendingImport && applyImport(pendingImport, true));
+    $('rosterMerge').addEventListener('click', () => pendingImport && applyImport(pendingImport, false));
+    $('rosterImportCancel').addEventListener('click', () => { pendingImport = null; $('rosterConfirm').hidden = true; });
+
+    $('rosterImportBtn').addEventListener('click', () => { $('rosterFile').value = ''; $('rosterFile').click(); });
+    $('rosterFile').addEventListener('change', (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        if (/\.(xlsx?|numbers|docx?|pdf)$/i.test(f.name)) {
+            alert('Questo tipo di file non si può leggere. Da Excel, Numbers o Fogli Google usa "Salva come / Esporta → CSV", oppure copia le celle e usa "Incolla elenco".');
+            return;
+        }
+        const rd = new FileReader();
+        rd.onload = () => proposeImport(parseRoster(rd.result), 'nel file');
+        rd.onerror = () => alert('Non riesco a leggere il file.');
+        rd.readAsText(f);
+    });
+    $('rosterPasteBtn').addEventListener('click', () => {
+        $('rosterConfirm').hidden = true;
+        $('rosterPaste').hidden = false;
+        $('rosterPasteText').value = '';
+        $('rosterPasteText').focus();
+    });
+    $('rosterPasteCancel').addEventListener('click', () => { $('rosterPaste').hidden = true; });
+    $('rosterPasteOk').addEventListener('click', () => proposeImport(parseRoster($('rosterPasteText').value), 'nell\'elenco'));
+
+    // ---- ROSTER: ESPORTA / CONDIVIDI ----
+    // CSV con ";" e BOM: si riapre nell'app e anche in Excel italiano.
+    function rosterCsv() {
+        const q = (v) => /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+        return '\uFEFF' + ['Numero;Nome;Ruolo'].concat(roster.filter(p => p.name.trim())
+            .map(p => [p.num.trim(), p.name.trim(), p.role.trim()].map(q).join(';'))).join('\r\n') + '\r\n';
+    }
+    function rosterFile() {
+        const date = new Date().toISOString().slice(0, 10);
+        return new File([rosterCsv()], `roster_${date}.csv`, { type: 'text/csv' });
+    }
+    $('rosterExportBtn').addEventListener('click', () => {
+        if (!roster.some(p => p.name.trim())) { alert('Il roster è vuoto.'); return; }
+        const f = rosterFile();
+        const url = URL.createObjectURL(f);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = f.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        showToast('Roster salvato in Download: ' + f.name);
+    });
+    // "Condividi" solo dove il sistema lo permette (telefoni e tablet)
+    try {
+        if (navigator.canShare && navigator.canShare({ files: [rosterFile()] })) $('rosterShareBtn').hidden = false;
+    } catch (_) {}
+    $('rosterShareBtn').addEventListener('click', () => {
+        if (!roster.some(p => p.name.trim())) { alert('Il roster è vuoto.'); return; }
+        navigator.share({ files: [rosterFile()], title: 'Roster squadra' }).catch(() => {});
     });
 
     // ---- TABELLE: FRECCE, SELEZIONE MULTIPLA, COPIA/INCOLLA (PC) ----
@@ -1477,8 +1853,9 @@
             renameShirt(old, nw, false);
         }
     }
-    let toastTimer = null;
+    let toastTimer = null, toastStamp = 0;
     function showToast(msg) {
+        toastStamp++;
         const t = $('toast');
         t.textContent = msg;
         t.classList.add('show');
@@ -2596,6 +2973,7 @@
     window.addEventListener('resize', () => { if (modal.classList.contains('open')) fitPreview(); });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && modal.classList.contains('open')) closePreview();
+        if (e.key === 'Escape' && rosterModal.classList.contains('open')) closeRoster();
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); openPreview(); }
     });
 
