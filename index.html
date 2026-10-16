@@ -258,6 +258,14 @@
             background: #fffdf8;
         }
         table.grid input::placeholder { color: #bbb; font-weight: 400; }
+        table.grid input.sel { background: rgba(var(--accent-rgb), 0.16); }
+        .kbd-hint { display: none; margin-top: 14px; font-size: 12.5px; color: #888; text-align: center; }
+        .kbd-hint kbd {
+            font-family: inherit; font-size: 11.5px; font-weight: 700;
+            border: 1px solid #ccc; border-bottom-width: 2px; border-radius: 5px;
+            padding: 1px 6px; background: #fafafa; color: #555;
+        }
+        @media (hover: hover) and (pointer: fine) { .kbd-hint { display: block; } }
         .note-box textarea {
             width: 100%;
             min-height: 170px;
@@ -354,6 +362,28 @@
             font-family: inherit;
         }
         .zoom-group button + button { border-left: 1px solid rgba(var(--accent-rgb), 0.3); }
+        .page-pick {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+            padding: 8px 20px 10px;
+            padding-left: max(20px, env(safe-area-inset-left));
+            padding-right: max(20px, env(safe-area-inset-right));
+            background: #f4f4f4; border-top: 1px solid #e2e2e2;
+            font-size: 13px;
+        }
+        .page-pick > span { font-weight: 700; color: #555; margin-right: 4px; }
+        .page-pick label {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 11px 5px 8px; border-radius: 40px;
+            background: #fff; border: 1.5px solid var(--accent); color: var(--accent);
+            font-weight: 700; cursor: pointer; user-select: none; -webkit-user-select: none;
+        }
+        .page-pick label.off { border-color: #ccc; color: #999; background: #fafafa; }
+        .page-pick input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+        .page-pick button {
+            border: none; background: none; color: var(--accent); font: inherit;
+            font-weight: 700; text-decoration: underline; cursor: pointer; padding: 5px 4px;
+        }
+        .preview-frame.excluded { opacity: 0.3; }
         .modal-body {
             flex: 1;
             overflow: auto;
@@ -394,14 +424,19 @@
         .sh-meta div b { font-size: 13px; }
         .sh-board { flex: 1; display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 40px; min-height: 0; }
         .sh-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
-        .sheet .block-title { font-size: 12px; margin-bottom: 5px; color: #111; }
-        .sheet table.grid { font-size: 12px; table-layout: fixed; }
+        .sheet .block-title { font-size: 13px; margin-bottom: 5px; color: #111; }
+        .sheet table.grid { font-size: 14px; table-layout: fixed; }
         .sheet table.grid td { border-color: #555; height: 23px; padding: 0 8px; }
         .sheet table.grid td.n, .sheet table.grid td.lbl { padding: 0 4px; }
         .sheet table.grid col.c-n { width: 40px; }
         .sheet table.grid col.c-lbl { width: 36%; }
-        .sheet table.grid td.sub { font-size: 11px; }
-        .sheet .v { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sheet table.grid td.sub { font-size: 12px; }
+        .sheet .v { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+        /* Formazione e punizioni laterali: le righe si allungano fino in
+           fondo al foglio, così non resta spazio vuoto e si legge meglio */
+        .sh-col.fill > div { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        .sh-col.fill table.grid { flex: 1; height: 100%; font-size: 16px; }
+        .sh-col.fill table.grid td.sub { font-size: 13px; }
         .sheet .note-box { flex: 1; display: flex; flex-direction: column; min-height: 0; }
         .sheet .note-text {
             flex: 1;
@@ -605,6 +640,9 @@
             .modal-bar .btn { padding: 10px 14px; flex: 1; white-space: nowrap; }
             .zoom-group { width: 100%; }
             .zoom-group button { flex: 1; }
+            /* scelta pagine su una sola riga che scorre di lato */
+            .page-pick { flex-wrap: nowrap; overflow-x: auto; padding: 8px 12px; font-size: 12.5px; }
+            .page-pick label, .page-pick > span, .page-pick button { flex: none; white-space: nowrap; }
             .modal-body { padding: 14px 8px; }
             .board { grid-template-columns: 1fr; }
             .board .col:first-child { grid-row: auto; }
@@ -691,6 +729,11 @@
 
     <!-- POSIZIONAMENTI -->
     <div class="board" id="board"></div>
+    <div class="kbd-hint">
+        <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> / <kbd>Invio</kbd> per spostarsi ·
+        <kbd>Maiusc</kbd> + frecce o trascina per selezionare più nomi ·
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>C</kbd> copia, <kbd>V</kbd> incolla · <kbd>Canc</kbd> svuota la selezione
+    </div>
     <datalist id="playersList"></datalist>
 
     <!-- CAMPO -->
@@ -741,6 +784,7 @@
             <span class="spinner"></span>
         </button>
     </div>
+    <div class="page-pick" id="pagePick"></div>
     <div class="modal-body" id="modalBody">
         <div class="preview-scaler" id="previewScaler">
             <div class="preview-frame">
@@ -1049,8 +1093,9 @@
             : `<div class="note-text">${esc(d.note)}</div>`;
 
         const colCls = editable ? 'col' : 'sh-col';
+        const fillCls = editable ? 'col' : 'sh-col fill';
         return `
-            <div class="${colCls}">
+            <div class="${fillCls}">
                 <div>${title('FORMAZIONE')}${tbl('n', form)}</div>
             </div>
             <div class="${colCls}">
@@ -1059,7 +1104,7 @@
                 <div>${title('PUNIZIONE CENTRALE')}${tbl('n', pc)}</div>
                 <div class="note-box"><table class="grid"><tr><td class="sub">NOTE</td></tr></table>${note}</div>
             </div>
-            <div class="${colCls}">
+            <div class="${fillCls}">
                 <div>${title('PUNIZIONI LATERALI DX')}${tbl('n', pun('punDx'))}</div>
                 <div>${title('PUNIZIONI LATERALI SX')}${tbl('n', pun('punSx'))}</div>
             </div>`;
@@ -1094,16 +1139,216 @@
     }
 
     // ---- EVENTI EDITOR ----
-    board.addEventListener('input', (e) => {
-        const path = e.target.dataset.path;
-        if (!path) return;
-        setPath(cur(), path, e.target.value);
-        if (/^(starters|bench|extra)/.test(path)) {
+    // Salva i campi indicati e aggiorna campo e schemi
+    function commitInputs(inputs) {
+        let names = false;
+        inputs.forEach(inp => {
+            setPath(cur(), inp.dataset.path, inp.value);
+            if (/^(starters|bench|extra)/.test(inp.dataset.path)) names = true;
+        });
+        if (names) {
             updatePlayersList();
             renderPitch();
         }
         renderSetPieces();
         save();
+    }
+    board.addEventListener('input', (e) => {
+        if (!e.target.dataset.path) return;
+        commitInputs([e.target]);
+    });
+
+    // ---- TABELLE: FRECCE, SELEZIONE MULTIPLA, COPIA/INCOLLA (PC) ----
+    // Le celle vicine si trovano per posizione sullo schermo, così le
+    // frecce funzionano anche passando da una tabella all'altra e con
+    // qualsiasi disposizione delle colonne (PC, iPad, telefono).
+    const gridInputs = () => [...board.querySelectorAll('table.grid input')];
+    function neighbor(el, dir) {
+        const r = el.getBoundingClientRect();
+        const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+        let best = null, bestD = Infinity;
+        gridInputs().forEach(o => {
+            if (o === el) return;
+            const q = o.getBoundingClientRect();
+            const ox = (q.left + q.right) / 2, oy = (q.top + q.bottom) / 2;
+            let d;
+            if (dir === 'up' || dir === 'down') {
+                if (q.right <= r.left + 2 || q.left >= r.right - 2) return;
+                if (dir === 'down' ? oy <= cy + 2 : oy >= cy - 2) return;
+                d = Math.abs(oy - cy) * 10 + Math.abs(ox - cx);
+            } else {
+                if (q.bottom <= r.top + 2 || q.top >= r.bottom - 2) return;
+                if (dir === 'right' ? ox <= cx + 2 : ox >= cx - 2) return;
+                d = Math.abs(ox - cx) * 10 + Math.abs(oy - cy);
+            }
+            if (d < bestD) { bestD = d; best = o; }
+        });
+        return best;
+    }
+
+    let selAnchor = null, selFocus = null, selCells = [];
+    function clearSel() {
+        selCells.forEach(c => c.classList.remove('sel'));
+        selCells = []; selAnchor = selFocus = null;
+    }
+    // seleziona il rettangolo che va dalla cella a alla cella b
+    function selectRange(a, b) {
+        selCells.forEach(c => c.classList.remove('sel'));
+        const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+        const L = Math.min(ra.left, rb.left), R = Math.max(ra.right, rb.right);
+        const T = Math.min(ra.top, rb.top), B = Math.max(ra.bottom, rb.bottom);
+        selCells = gridInputs().filter(o => {
+            const q = o.getBoundingClientRect();
+            const ox = (q.left + q.right) / 2, oy = (q.top + q.bottom) / 2;
+            return ox > L && ox < R && oy > T && oy < B;
+        });
+        selAnchor = a; selFocus = b;
+        if (selCells.length > 1) selCells.forEach(c => c.classList.add('sel'));
+    }
+    const multiSel = () => selCells.length > 1;
+    function goTo(el) {
+        if (!el) return;
+        el.focus();
+        el.select();
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    // testo con tabulazioni (come Excel): righe = \n, colonne = \t
+    function selText() {
+        const rows = [];
+        selCells.map(c => ({ c, r: c.getBoundingClientRect() }))
+            .sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left)
+            .forEach(it => {
+                const last = rows[rows.length - 1];
+                if (last && Math.abs(last.top - it.r.top) < 4) last.vals.push(it.c.value);
+                else rows.push({ top: it.r.top, vals: [it.c.value] });
+            });
+        return rows.map(r => r.vals.join('\t')).join('\n');
+    }
+
+    board.addEventListener('keydown', (e) => {
+        const el = e.target;
+        if (!el.matches('table.grid input')) return;
+        const k = e.key;
+        if (k === 'Escape' && multiSel()) { clearSel(); return; }
+        if ((k === 'Delete' || k === 'Backspace') && multiSel()) {
+            e.preventDefault();
+            selCells.forEach(c => { c.value = ''; });
+            commitInputs(selCells);
+            return;
+        }
+        if (k === 'F2') { e.preventDefault(); el.setSelectionRange(el.value.length, el.value.length); return; }
+        const dirs = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+        let dir = dirs[k];
+        if (k === 'Enter') dir = e.shiftKey ? 'up' : 'down';
+        if (!dir || e.altKey || e.ctrlKey || e.metaKey) return;
+        // ← → muovono il cursore nel testo; cambiano cella solo quando il
+        // cursore è già all'inizio/fine o quando il testo è tutto selezionato
+        if (dir === 'left' || dir === 'right') {
+            const a = el.selectionStart, b = el.selectionEnd, len = el.value.length;
+            const all = a === 0 && b === len;
+            const edge = a === b && (dir === 'left' ? a === 0 : a === len);
+            if (!all && !edge && !multiSel()) return;
+        }
+        e.preventDefault();
+        if (e.shiftKey && k !== 'Enter') {
+            const anchor = selAnchor || el;
+            const next = neighbor(selFocus || el, dir);
+            if (!next) return;
+            selectRange(anchor, next);
+            next.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            return;
+        }
+        const from = el;
+        clearSel();
+        goTo(neighbor(from, dir));
+    });
+
+    // selezione col mouse: clic e trascina, oppure Maiusc + clic
+    let dragFrom = null;
+    board.addEventListener('mousedown', (e) => {
+        const el = e.target.closest('table.grid input');
+        if (!el || e.button !== 0) return;
+        if (e.shiftKey && document.activeElement && document.activeElement.matches('#board table.grid input')) {
+            e.preventDefault();
+            selectRange(selAnchor || document.activeElement, el);
+            return;
+        }
+        clearSel();
+        dragFrom = el;
+    });
+    board.addEventListener('mouseover', (e) => {
+        if (!dragFrom || !(e.buttons & 1)) return;
+        const el = e.target.closest('table.grid input');
+        if (!el || (el === dragFrom && !multiSel())) return;
+        selectRange(dragFrom, el);
+        window.getSelection().removeAllRanges();
+    });
+    document.addEventListener('mouseup', () => {
+        if (dragFrom && multiSel()) dragFrom.focus();
+        dragFrom = null;
+    });
+    // spostandosi su una cella fuori dalla selezione (Tab, tocco…) la si toglie
+    board.addEventListener('focusin', (e) => {
+        if (multiSel() && !selCells.includes(e.target)) clearSel();
+    });
+    // un clic fuori dalle tabelle toglie la selezione
+    document.addEventListener('mousedown', (e) => {
+        if (multiSel() && !e.target.closest('#board table.grid')) clearSel();
+    });
+
+    board.addEventListener('copy', (e) => {
+        if (!multiSel()) return;
+        e.preventDefault();
+        e.clipboardData.setData('text/plain', selText());
+    });
+    board.addEventListener('cut', (e) => {
+        if (!multiSel()) return;
+        e.preventDefault();
+        e.clipboardData.setData('text/plain', selText());
+        selCells.forEach(c => { c.value = ''; });
+        commitInputs(selCells);
+    });
+    // Incolla più nomi (copiati da qui, da Excel o da un elenco):
+    // uno per riga, a partire dalla cella scelta e verso il basso.
+    board.addEventListener('paste', (e) => {
+        const el = e.target;
+        if (!el.matches || !el.matches('table.grid input')) return;
+        const text = (e.clipboardData || window.clipboardData).getData('text');
+        if (!text) return;
+        const clean = text.replace(/\r/g, '').replace(/\n+$/, '');
+        const lines = clean.split('\n').map(l => l.split('\t'));
+        const changed = [];
+        if (lines.length === 1 && lines[0].length === 1) {
+            // un solo nome su più celle selezionate: lo mette in tutte
+            if (!multiSel()) return;
+            e.preventDefault();
+            selCells.forEach(c => { c.value = lines[0][0].trim(); changed.push(c); });
+        } else {
+            e.preventDefault();
+            const start = multiSel()
+                ? selCells.slice().sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top
+                    || a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0]
+                : el;
+            let rowStart = start;
+            for (const vals of lines) {
+                if (!rowStart) break;
+                let c = rowStart;
+                for (const v of vals) {
+                    if (!c) break;
+                    c.value = v.trim();
+                    changed.push(c);
+                    c = neighbor(c, 'right');
+                }
+                rowStart = neighbor(rowStart, 'down');
+            }
+        }
+        commitInputs(changed);
+        clearSel();
+        if (changed.length > 1) {
+            changed.forEach(c => c.classList.add('sel'));
+            selCells = changed;
+            selAnchor = changed[0];
+        }
     });
 
     document.querySelectorAll('[data-meta]').forEach(el => {
@@ -2171,8 +2416,42 @@
     $('zoomOutBtn').addEventListener('click', () => changeZoom(-0.25));
     $('zoomFitBtn').addEventListener('click', () => { zoom = null; fitPreview(); });
 
+    // Pagine da salvare: di default tutte, il mister può togliere quelle
+    // che non servono. Si riparte da tutte a ogni apertura dell'anteprima.
+    let skipPages = new Set();
+    function pageNames() {
+        return ['Scheda', 'Schieramento'].concat(spKinds().map(k => k.custom ? k.title
+            : (k.title.charAt(0) + k.title.slice(1).toLowerCase()).replace(/ (dx|sx)$/, m => m.toUpperCase())));
+    }
+    function renderPagePick() {
+        const frames = [...scaler.querySelectorAll('.preview-frame')];
+        frames.forEach((f, i) => f.classList.toggle('excluded', skipPages.has(i)));
+        const names = pageNames();
+        const all = skipPages.size === 0;
+        $('pagePick').innerHTML = `<span>Pagine da salvare:</span>` + frames.map((f, i) =>
+            `<label class="${skipPages.has(i) ? 'off' : ''}"><input type="checkbox" data-page="${i}" ${skipPages.has(i) ? '' : 'checked'}/>${i + 1} · ${esc(names[i] || 'Pagina')}</label>`).join('') +
+            `<button type="button" id="pagesAllBtn">${all ? 'Nessuna' : 'Tutte'}</button>`;
+        const n = frames.length - skipPages.size;
+        $('savePdfBtn').querySelector('.btn-text').textContent =
+            all ? '✓ Conferma e salva' : `✓ Salva ${n} ${n === 1 ? 'pagina' : 'pagine'}`;
+        $('savePdfBtn').disabled = n === 0;
+    }
+    $('pagePick').addEventListener('change', (e) => {
+        const i = +e.target.dataset.page;
+        if (e.target.checked) skipPages.delete(i); else skipPages.add(i);
+        renderPagePick();
+    });
+    $('pagePick').addEventListener('click', (e) => {
+        if (e.target.id !== 'pagesAllBtn') return;
+        const count = scaler.querySelectorAll('.preview-frame').length;
+        skipPages = skipPages.size === 0 ? new Set([...Array(count).keys()]) : new Set();
+        renderPagePick();
+    });
+
     function openPreview() {
         buildSheet();
+        skipPages = new Set();
+        renderPagePick();
         modal.classList.add('open');
         modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
@@ -2209,10 +2488,17 @@
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
             pagebreak: { mode: ['avoid-all'] }
         };
-        // Per ogni foglio successivo al primo (7 fissi + schemi personalizzati)
-        // si aggiunge una pagina A4 orizzontale e lo si cattura.
-        let worker = html2pdf().set(opt).from(sheet).toPdf();
-        [...scaler.querySelectorAll('.sheet')].slice(1).forEach(sh => {
+        // Solo le pagine scelte. Per ogni foglio dopo il primo si aggiunge
+        // una pagina A4 orizzontale e lo si cattura.
+        const sheets = [...scaler.querySelectorAll('.sheet')].filter((_, i) => !skipPages.has(i));
+        if (!sheets.length) {
+            btn.classList.remove('loading');
+            btn.disabled = false;
+            alert('Scegli almeno una pagina da salvare.');
+            return Promise.resolve();
+        }
+        let worker = html2pdf().set(opt).from(sheets[0]).toPdf();
+        sheets.slice(1).forEach(sh => {
             worker = worker.get('pdf').then(pdf => { pdf.addPage('a4', 'landscape'); })
                 .from(sh).toContainer().toCanvas().toPdf();
         });
