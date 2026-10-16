@@ -511,7 +511,9 @@
         .sp-svg .sp circle { fill: var(--accent); stroke: #fff; }
         .sp-svg .sp:focus-visible circle, .sp-svg .sp.dragging circle { stroke: #111; }
         .sp-svg .sp .lb { fill: #fff; font-weight: 800; }
-        /* pedine aggiunte (titolari senza ruolo nello schema): vuote, bordo colorato */
+        /* pedine aggiunte (titolari senza ruolo nello schema): vuote, bordo colorato.
+           Il raggio è ridotto dello spessore del bordo, così la grandezza
+           visibile è uguale a quella delle pedine piene col bordo bianco */
         .sp-svg .sp.piece circle { fill: #fff; stroke: var(--accent); }
         .sp-svg .sp.piece .lb { fill: var(--accent); }
         .sp-svg .sp .name { fill: #111; font-weight: 700; paint-order: stroke; stroke: #fff; stroke-linejoin: round; }
@@ -2006,7 +2008,6 @@
                 return `<g transform="${pos}">
                     <g transform="scale(${V.kc})">
                         <circle r="1.9" fill="#fff" stroke="#111" stroke-width="${(lineW / V.kc).toFixed(3)}"/>
-                        ${el.piece ? `<circle r="1.55" fill="none" stroke="#111" stroke-width="${(lineW * 0.7 / V.kc).toFixed(3)}"/>` : ''}
                         <text y="${lbY}" text-anchor="middle" font-size="${lbSize}" font-weight="700" fill="#111">${esc(el.label)}</text>
                     </g>
                     <text ${nameAttrs} font-weight="700" fill="#111" stroke="#fff" stroke-width="${V.px(3).toFixed(3)}" paint-order="stroke" stroke-linejoin="round">${esc(name)}</text>
@@ -2014,7 +2015,7 @@
             }
             return `<g class="sp${el.piece ? ' piece' : ''}" data-kind="${kind}" data-key="${el.key}" tabindex="0" role="button" aria-label="${esc(el.label)} ${esc(name)}" transform="${pos}">
                 <g transform="scale(${V.kc})">
-                    <circle r="1.9" style="stroke-width:${(V.px(2) / V.kc).toFixed(3)}"/>
+                    <circle r="${el.piece ? (1.9 - V.px(2) / V.kc).toFixed(3) : 1.9}" style="stroke-width:${(V.px(2) / V.kc).toFixed(3)}"/>
                     <text class="lb" y="${lbY}" text-anchor="middle" font-size="${lbSize}">${esc(el.label)}</text>
                 </g>
                 <text class="name" ${nameAttrs} style="stroke-width:${V.px(3).toFixed(3)}">${esc(name)}</text>
