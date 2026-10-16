@@ -923,6 +923,9 @@
             formation: c.formations[0],
             starters: arr(c.starters),
             bench: arr(c.bench),
+            // numeri di maglia della Formazione, modificabili (es. il 2 in panchina)
+            starterNums: Array.from({ length: c.starters }, (_, i) => String(i + 1)),
+            benchNums: Array.from({ length: c.bench }, (_, i) => String(c.starters + i + 1)),
             extraNum: '',
             extra: '',
             cornerContro: { palo: '', vertice: '', marcatori: Array.from({ length: c.marcatori }, () => ({ a: '', b: '' })) },
@@ -1047,11 +1050,11 @@
         // FORMAZIONE
         let form = '';
         for (let i = 0; i < c.starters; i++) {
-            form += `<tr><td class="n">${i + 1}</td><td>${plain('starters.' + i, editable ? 'Titolare' : '')}</td></tr>`;
+            form += `<tr><td class="n">${plain('starterNums.' + i, editable ? '—' : '')}</td><td>${plain('starters.' + i, editable ? 'Titolare' : '')}</td></tr>`;
         }
         form += `<tr><td class="sub" colspan="2">PANCHINA</td></tr>`;
         for (let i = 0; i < c.bench; i++) {
-            form += `<tr><td class="n">${c.starters + i + 1}</td><td>${plain('bench.' + i, editable ? 'Riserva' : '')}</td></tr>`;
+            form += `<tr><td class="n">${plain('benchNums.' + i, editable ? '—' : '')}</td><td>${plain('bench.' + i, editable ? 'Riserva' : '')}</td></tr>`;
         }
         form += `<tr><td class="n">${plain('extraNum', editable ? '—' : '')}</td><td>${plain('extra', editable ? 'Altro / staff' : '')}</td></tr>`;
 
@@ -1145,8 +1148,11 @@
     function commitInputs(inputs) {
         let names = false;
         inputs.forEach(inp => {
-            setPath(cur(), inp.dataset.path, inp.value);
-            if (/^(starters|bench|extra)/.test(inp.dataset.path)) names = true;
+            const path = inp.dataset.path;
+            const old = getPath(cur(), path);
+            setPath(cur(), path, inp.value);
+            if (/^starterNums\./.test(path)) renameShirt(old, inp.value);
+            if (/^(starter|bench|extra)/.test(path)) names = true;
         });
         if (names) {
             updatePlayersList();
@@ -1155,9 +1161,15 @@
         renderSetPieces();
         save();
     }
+    // I numeri di maglia si salvano quando si lascia la cella (non a ogni
+    // tasto), così scrivendo "14" non si passa per il numero "1".
+    const isNum = (el) => /Nums\./.test(el.dataset.path || '');
     board.addEventListener('input', (e) => {
-        if (!e.target.dataset.path) return;
+        if (!e.target.dataset.path || isNum(e.target)) return;
         commitInputs([e.target]);
+    });
+    board.addEventListener('change', (e) => {
+        if (e.target.dataset.path && isNum(e.target)) commitInputs([e.target]);
     });
 
     // ---- TABELLE: FRECCE, SELEZIONE MULTIPLA, COPIA/INCOLLA (PC) ----
@@ -1399,16 +1411,28 @@
     // Il numero sul pallino è il numero di maglia = riga della Formazione
     // (titolari 1..N, panchina N+1..). Il nome si legge/scrive su quella riga,
     // così campo e lista restano sempre allineati.
+    // I numeri si possono cambiare in tabella: si cerca la riga che ha
+    // quel numero (titolari, poi panchina, poi riga libera).
     function rowPath(num) {
-        const c = CONFIG[state.mode];
         const d = cur();
-        const n = parseInt(num, 10);
-        if (String(n) === String(num).trim() && n >= 1) {
-            if (n <= c.starters) return 'starters.' + (n - 1);
-            if (n <= c.starters + c.bench) return 'bench.' + (n - c.starters - 1);
-        }
-        if (String(num).trim() && String(num).trim() === d.extraNum.trim()) return 'extra';
+        const n = String(num == null ? '' : num).trim();
+        if (!n) return null;
+        let i = d.starterNums.findIndex(x => x.trim() === n);
+        if (i >= 0) return 'starters.' + i;
+        i = d.benchNums.findIndex(x => x.trim() === n);
+        if (i >= 0) return 'bench.' + i;
+        if (n === d.extraNum.trim()) return 'extra';
         return null;
+    }
+    // Numero di un titolare cambiato in tabella: il suo pallino in campo
+    // prende il nuovo numero (i numeri della panchina non toccano il campo).
+    function renameShirt(oldNum, newNum) {
+        const d = cur();
+        const o = String(oldNum).trim(), nw = String(newNum).trim();
+        if (!o || o === nw) return;
+        Object.values(d.pitch || {}).forEach(slots => {
+            if (Array.isArray(slots)) slots.forEach(sl => { if (String(sl.num).trim() === o) sl.num = nw; });
+        });
     }
 
     function getSlots() {
@@ -1416,7 +1440,8 @@
         const saved = d.pitch[d.formation];
         const def = POSITIONS[state.mode][d.formation] || [];
         if (Array.isArray(saved) && saved.length === def.length) return saved;
-        return def.map(([num, lx, dy]) => ({ num: String(num), lx, dy, name: '' }));
+        // il ruolo n del modulo è la riga n dei titolari, con il suo numero
+        return def.map(([num, lx, dy]) => ({ num: (d.starterNums[num - 1] || '').trim() || String(num), lx, dy, name: '' }));
     }
     function storeSlots(slots) { cur().pitch[cur().formation] = slots; }
 
@@ -1427,12 +1452,16 @@
 
     // Numeri della lista non schierati in campo = panchina
     function benchRows() {
-        const c = CONFIG[state.mode];
+        const d = cur();
         const onPitch = new Set(getSlots().map(s => String(s.num).trim()));
         const rows = [];
-        for (let n = 1; n <= c.starters + c.bench; n++) {
-            if (!onPitch.has(String(n))) rows.push({ num: String(n), name: getPath(cur(), rowPath(n)) || '' });
-        }
+        const add = (nums, names) => nums.forEach((num, i) => {
+            const n = num.trim();
+            if (n && onPitch.has(n)) return;
+            if (n || names[i].trim()) rows.push({ num: n, name: names[i] || '' });
+        });
+        add(d.starterNums, d.starters);
+        add(d.benchNums, d.bench);
         return rows;
     }
 
