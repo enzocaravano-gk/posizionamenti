@@ -266,6 +266,14 @@
             padding: 1px 6px; background: #fafafa; color: #555;
         }
         @media (hover: hover) and (pointer: fine) { .kbd-hint { display: block; } }
+        .toast {
+            position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom));
+            transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+            background: #222; color: #fff; padding: 11px 18px; border-radius: 12px;
+            font-size: 14px; font-weight: 600; box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+            transition: opacity 0.2s, transform 0.2s; z-index: 900; max-width: calc(100% - 32px); text-align: center;
+        }
+        .toast.show { opacity: 1; transform: translate(-50%, 0); }
         .note-box textarea {
             width: 100%;
             min-height: 170px;
@@ -771,6 +779,8 @@
     </div>
 </div>
 
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
 <!-- MODALE ANTEPRIMA -->
 <div class="modal" id="previewModal" aria-hidden="true">
     <div class="modal-bar">
@@ -1145,13 +1155,13 @@
 
     // ---- EVENTI EDITOR ----
     // Salva i campi indicati e aggiorna campo e schemi
+    const isNumPath = (path) => /Nums\./.test(path) || path === 'extraNum';
     function commitInputs(inputs) {
         let names = false;
         inputs.forEach(inp => {
             const path = inp.dataset.path;
-            const old = getPath(cur(), path);
-            setPath(cur(), path, inp.value);
-            if (/^starterNums\./.test(path)) renameShirt(old, inp.value);
+            if (isNumPath(path)) setShirt(path, inp.value);
+            else setPath(cur(), path, inp.value);
             if (/^(starter|bench|extra)/.test(path)) names = true;
         });
         if (names) {
@@ -1163,7 +1173,7 @@
     }
     // I numeri di maglia si salvano quando si lascia la cella (non a ogni
     // tasto), così scrivendo "14" non si passa per il numero "1".
-    const isNum = (el) => /Nums\./.test(el.dataset.path || '');
+    const isNum = (el) => isNumPath(el.dataset.path || '');
     board.addEventListener('input', (e) => {
         if (!e.target.dataset.path || isNum(e.target)) return;
         commitInputs([e.target]);
@@ -1426,13 +1436,54 @@
     }
     // Numero di un titolare cambiato in tabella: il suo pallino in campo
     // prende il nuovo numero (i numeri della panchina non toccano il campo).
-    function renameShirt(oldNum, newNum) {
+    // swap = true: i pallini col vecchio e col nuovo numero si scambiano
+    function renameShirt(oldNum, newNum, swap) {
         const d = cur();
         const o = String(oldNum).trim(), nw = String(newNum).trim();
-        if (!o || o === nw) return;
+        if (o === nw) return;
         Object.values(d.pitch || {}).forEach(slots => {
-            if (Array.isArray(slots)) slots.forEach(sl => { if (String(sl.num).trim() === o) sl.num = nw; });
+            if (!Array.isArray(slots)) return;
+            slots.forEach(sl => {
+                const n = String(sl.num).trim();
+                if (o && n === o) sl.num = nw;
+                else if (swap && nw && n === nw) sl.num = o;
+            });
         });
+    }
+    // tutte le celle con un numero di maglia nella Formazione
+    function numPaths() {
+        const d = cur();
+        return d.starterNums.map((_, i) => 'starterNums.' + i)
+            .concat(d.benchNums.map((_, i) => 'benchNums.' + i), ['extraNum']);
+    }
+    // Regola dei numeri: niente doppioni. Se il nuovo numero è già di
+    // un'altra riga, quella riga prende il vecchio numero (scambio).
+    function setShirt(path, value) {
+        const d = cur();
+        const old = String(getPath(d, path) || '').trim();
+        const nw = String(value).trim();
+        setPath(d, path, nw);
+        if (old === nw) return;
+        const other = nw ? numPaths().find(p => p !== path && String(getPath(d, p) || '').trim() === nw) : null;
+        if (other) {
+            setPath(d, other, old);
+            const inp = board.querySelector(`[data-path="${other}"]`);
+            if (inp) inp.value = old;
+            renameShirt(old, nw, true);
+            showToast(old
+                ? `Il ${nw} c'era già: quella riga ora ha il ${old}`
+                : `Il ${nw} c'era già: tolto dall'altra riga`);
+        } else if (/^starterNums\./.test(path)) {
+            renameShirt(old, nw, false);
+        }
+    }
+    let toastTimer = null;
+    function showToast(msg) {
+        const t = $('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
     }
 
     function getSlots() {
