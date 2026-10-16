@@ -643,7 +643,7 @@
         .sh-pitch .field-svg svg { display: block; }
         .sh-pitch aside { width: 190px; flex: none; }
         .preview-frame + .preview-frame, #extraFrames .preview-frame { margin-top: 24px; }
-        /* pagine 3-6 PDF: uno schema per pagina, margini laterali ridotti */
+        /* pagine 3-9 PDF: uno schema per pagina, margini laterali ridotti */
         .sheet.sp-sheet { padding-left: 20px; padding-right: 20px; }
         .sh-sp { flex: 1; display: flex; gap: 24px; align-items: center; justify-content: center; min-height: 0; }
         .sh-sp .block-title { font-size: 14px; margin-bottom: 8px; }
@@ -863,6 +863,12 @@
             <div class="preview-frame">
                 <div class="sheet sp-sheet" id="sheet7"></div>
             </div>
+            <div class="preview-frame">
+                <div class="sheet sp-sheet" id="sheet8"></div>
+            </div>
+            <div class="preview-frame">
+                <div class="sheet sp-sheet" id="sheet9"></div>
+            </div>
             <div id="extraFrames"></div>
         </div>
     </div>
@@ -960,7 +966,7 @@
     // sui corner: le righe si adattano, la struttura resta quella del foglio.
     const CONFIG = {
         '11': { starters: 11, bench: 9, marcatori: 5, linea: 7,
-                formations: ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '3-4-3', '5-3-2', '4-1-2-1-2'] },
+                formations: ['4-4-2', '4-3-3', '4-3-1-2', '4-2-3-1', '3-5-2', '3-4-3', '5-3-2', '4-1-2-1-2'] },
         '9':  { starters: 9, bench: 9, marcatori: 4, linea: 5,
                 formations: ['3-3-2', '3-2-3', '3-4-1', '2-3-3', '3-1-3-1'] }
     };
@@ -987,6 +993,7 @@
         '11': {
             '4-4-2': [...DEF4, [7, .88, .48], [4, .62, .45], [8, .38, .45], [11, .12, .48], [9, .62, .75], [10, .38, .75]],
             '4-3-3': [...DEF4, [8, .74, .45], [4, .5, .41], [10, .26, .45], [7, .85, .72], [9, .5, .78], [11, .15, .72]],
+            '4-3-1-2': [...DEF4, [8, .76, .45], [4, .5, .4], [7, .24, .45], [10, .5, .6], [9, .62, .79], [11, .38, .79]],
             '4-2-3-1': [...DEF4, [4, .62, .38], [8, .38, .38], [7, .85, .58], [10, .5, .6], [11, .15, .58], [9, .5, .8]],
             '3-5-2': [[1, .5, .04], [2, .75, .2], [5, .5, .18], [6, .25, .2], [7, .92, .47], [8, .7, .48], [4, .5, .41], [10, .3, .48], [3, .08, .47], [9, .62, .76], [11, .38, .76]],
             '3-4-3': [[1, .5, .04], [2, .75, .2], [5, .5, .18], [6, .25, .2], [7, .9, .47], [4, .62, .44], [8, .38, .44], [3, .1, .47], [10, .82, .72], [9, .5, .78], [11, .18, .72]],
@@ -1042,7 +1049,7 @@
             // { cc: { palo: { x, y } }, cf: {...}, pdx: {...}, psx: {...} }
             setPos: {},
             // nota libera su ogni schema (la posizione sta in setPos[kind].note)
-            spNotes: { cc: '', cf: '', pdx: '', psx: '' },
+            spNotes: { ccdx: '', ccsx: '', cfdx: '', cfsx: '', pdx: '', psx: '', pc: '' },
             // schemi personalizzati: [{ id, title, type: 'half' | 'full' }]
             customSchemes: [],
             // numero e nome delle pedine in più: { cc: { x0: { num, name } } }
@@ -1074,6 +1081,36 @@
         return (typeof saved === 'string') ? saved : base;
     }
 
+    // Prima c'era un solo schema per corner (pallone a destra): diventa lo
+    // schema "da DX" e quello "da SX" parte dalle stesse posizioni specchiate.
+    function migrateCorners(d) {
+        const mirror = (pos, swap) => {
+            const out = {};
+            Object.keys(pos || {}).forEach(k => {
+                const v = pos[k];
+                if (!v || typeof v.x !== 'number') return;
+                const key = swap && k === 'dx' ? 'sx' : swap && k === 'sx' ? 'dx' : k;
+                out[key] = { ...v, x: 68 - v.x };
+            });
+            return out;
+        };
+        ['cc', 'cf'].forEach(b => {
+            if (d.setPos && d.setPos[b]) {
+                if (!d.setPos[b + 'dx']) d.setPos[b + 'dx'] = d.setPos[b];
+                if (!d.setPos[b + 'sx']) d.setPos[b + 'sx'] = mirror(d.setPos[b], b === 'cf');
+                delete d.setPos[b];
+            }
+            if (d.spNotes && typeof d.spNotes[b] === 'string') {
+                if (!d.spNotes[b + 'dx']) d.spNotes[b + 'dx'] = d.spNotes[b];
+                delete d.spNotes[b];
+            }
+            if (d.spPieces && d.spPieces[b]) {
+                ['dx', 'sx'].forEach(sd => { if (!d.spPieces[b + sd]) d.spPieces[b + sd] = JSON.parse(JSON.stringify(d.spPieces[b])); });
+                delete d.spPieces[b];
+            }
+        });
+    }
+
     let state = emptyState();
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -1098,6 +1135,7 @@
                         if (typeof sd.spNotes[k] === 'string') state.data[m].spNotes[k] = sd.spNotes[k];
                     });
                 }
+                migrateCorners(state.data[m]);
             });
         }
     } catch (_) {}
@@ -2124,8 +2162,10 @@
     // I nomi sono quelli delle tabelle (stesso percorso dati), quindi
     // schema e tabella restano sempre allineati.
     const SP_BASE = [
-        { kind: 'cc', title: 'CALCI D’ANGOLO CONTRO' },
-        { kind: 'cf', title: 'CALCI D’ANGOLO A FAVORE' },
+        { kind: 'ccdx', title: 'CALCI D’ANGOLO CONTRO DA DX' },
+        { kind: 'ccsx', title: 'CALCI D’ANGOLO CONTRO DA SX' },
+        { kind: 'cfdx', title: 'CALCI D’ANGOLO A FAVORE DA DX' },
+        { kind: 'cfsx', title: 'CALCI D’ANGOLO A FAVORE DA SX' },
         { kind: 'pdx', title: 'PUNIZIONI LATERALI DX' },
         { kind: 'psx', title: 'PUNIZIONI LATERALI SX' },
         { kind: 'pc', title: 'PUNIZIONE CENTRALE' }
@@ -2135,6 +2175,9 @@
     function spKinds() {
         return SP_BASE.concat((cur().customSchemes || []).map(c => ({ kind: c.id, title: c.title, custom: c.type })));
     }
+    // corner: 'cc' / 'cf' + lato ('dx' = pallone a destra nel disegno).
+    // Il lato sinistro è lo specchio del destro.
+    const cornerOf = (kind) => /^(cc|cf)(dx|sx)$/.exec(kind);
     const spTitle = (kind) => (spKinds().find(k => k.kind === kind) || {}).title || '';
 
     // Elementi di ogni schema con posizione predefinita.
@@ -2146,13 +2189,14 @@
         const custom = customOf(kind);
         if (custom) {
             // schema personalizzato: solo le pedine della squadra
-        } else if (kind === 'cc') {
-            add('palo', 'P', 'cornerContro.palo', 37.5, 1.8, { nameUp: true });
-            add('vertice', 'V', 'cornerContro.vertice', 44, 3, { nameSide: true });
+        } else if (cornerOf(kind) && cornerOf(kind)[1] === 'cc') {
+            const mx = (x) => cornerOf(kind)[2] === 'dx' ? x : 68 - x;
+            add('palo', 'P', 'cornerContro.palo', mx(37.5), 1.8, { nameUp: true });
+            add('vertice', 'V', 'cornerContro.vertice', mx(44), 3, { nameSide: true });
             // marcatori su due file sfalsate, avversario (quadrato) sotto
             const n = d.cornerContro.marcatori.length;
             d.cornerContro.marcatori.forEach((_, i) => {
-                add('m' + i, 'M', 'cornerContro.marcatori.' + i + '.b', 33 + (i - (n - 1) / 2) * 8, i % 2 ? 14 : 10.5,
+                add('m' + i, 'M', 'cornerContro.marcatori.' + i + '.b', mx(33 + (i - (n - 1) / 2) * 8), i % 2 ? 14 : 10.5,
                     { nameUp: true, opp: 'cornerContro.marcatori.' + i + '.a' });
             });
         } else if (kind === 'pc') {
@@ -2163,12 +2207,15 @@
                 add('b' + i, (i + 1) + '°', 'punCentrale.barriera.' + i, 34 + (i - (n - 1) / 2) * 2.2, 14.85, { nameUp: true });
             });
             add('inc', 'INC', 'punCentrale.inc', 37, 19.5);
-        } else if (kind === 'cf') {
-            add('dx', 'DX', 'cornerFavore.dx', 65, 3.2);
-            add('sx', 'SX', 'cornerFavore.sx', 3, 3.2);
+        } else if (cornerOf(kind)) {
+            // corner a favore: batte il battitore del lato, coperture specchiate
+            const dx = cornerOf(kind)[2] === 'dx';
+            const mx = (x) => dx ? x : 68 - x;
+            if (dx) add('dx', 'DX', 'cornerFavore.dx', 65, 3.2);
+            else add('sx', 'SX', 'cornerFavore.sx', 3, 3.2);
             add('c0', '1°', 'cornerFavore.copertura.0', 34, 20);
-            add('c1', '2°', 'cornerFavore.copertura.1', 21, 25);
-            add('c2', '3°', 'cornerFavore.copertura.2', 47, 25);
+            add('c1', '2°', 'cornerFavore.copertura.1', mx(21), 25);
+            add('c2', '3°', 'cornerFavore.copertura.2', mx(47), 25);
         } else {
             // punizione laterale: definita per il lato destro, specchiata per il sinistro
             const key = kind === 'pdx' ? 'punDx' : 'punSx';
@@ -2223,8 +2270,7 @@
     // come gli altri elementi, chiave 'ball'); nei corner è fisso.
     const ballMovable = (kind) => kind === 'pdx' || kind === 'psx' || kind === 'pc' || !!customOf(kind);
     function spBalls(kind) {
-        if (kind === 'cc') return [[67.4, 0.6]];
-        if (kind === 'cf') return [[67.4, 0.6], [0.6, 0.6]];
+        if (cornerOf(kind)) return cornerOf(kind)[2] === 'dx' ? [[67.4, 0.6]] : [[0.6, 0.6]];
         const saved = cur().setPos[kind] && cur().setPos[kind].ball;
         if (saved) return [[saved.x, saved.y]];
         const custom = customOf(kind);
@@ -2279,7 +2325,9 @@
     };
     function spView(kind) {
         const c = customOf(kind);
-        return c ? SP_VIEW_CUSTOM[c.type] : SP_VIEW[kind];
+        if (c) return SP_VIEW_CUSTOM[c.type];
+        const co = cornerOf(kind);
+        return SP_VIEW[co ? co[1] : kind];
     }
 
     // Linee del campo in metri reali, disegnate attraverso la mappatura.
@@ -2548,7 +2596,7 @@
     const spGrid = $('spGrid');
     // Sul telefono gli schemi restano larghi almeno 560-600 px e si scorrono
     // di lato, altrimenti pallini e nomi si sovrapporrebbero.
-    const SP_MIN_WIDTH = { cc: 560, cf: 560, pdx: 600, psx: 600, pc: 560, half: 600, full: 600 };
+    const SP_MIN_WIDTH = { ccdx: 560, ccsx: 560, cfdx: 560, cfsx: 560, pdx: 600, psx: 600, pc: 560, half: 600, full: 600 };
     let spGridWidth = 0;
     function renderSetPieces() {
         spGridWidth = spGrid.clientWidth || 340;
@@ -2836,7 +2884,7 @@
                 </aside>
             </div>`;
 
-        // Pagine 3-7: palle inattive, uno schema per pagina (solo linee nere)
+        // Pagine 3-9: palle inattive, uno schema per pagina (solo linee nere)
         SP_BASE.forEach((k, i) => {
             $('sheet' + (i + 3)).innerHTML = sheetHead(k.title) +
                 `<div class="sh-sp">${spSVG(k.kind, true)}</div>`;
