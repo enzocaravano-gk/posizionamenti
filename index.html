@@ -501,6 +501,18 @@
         .sp-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .sp-card-head { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
         .sp-card-head .block-title { margin-bottom: 0; }
+        /* selezione multipla delle pedine */
+        .sp-tools { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 8px; margin: -2px 0 8px; font-size: 12.5px; color: #777; }
+        .sp-tools .sp-act { min-height: 30px; padding: 4px 12px; font-size: 12.5px; }
+        .sp-tools .sp-act.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .sp-tools .sel-only { display: none; }
+        .sp-card.selecting .sp-tools .sel-only, .sp-card.has-sel .sp-tools .sel-only { display: inline-flex; }
+        .sp-card .sp-tools .sel-hint { display: none; }
+        .sp-card.selecting .sp-tools .sel-hint { display: inline; }
+        .sp-card.selecting .sp-svg { cursor: crosshair; touch-action: none; }
+        .sp-svg g.sp circle.halo { display: none; fill: none; stroke: #f0a500; stroke-dasharray: 0.9 0.6; }
+        .sp-svg g.sp.sel circle.halo { display: inline; }
+        .sp-svg .lasso { fill: rgba(240, 165, 0, 0.12); stroke: #f0a500; stroke-dasharray: 4 3; }
         .sp-type { font-size: 12px; color: #777; }
         .sp-act {
             background: #fff;
@@ -2518,8 +2530,10 @@
                     <text ${nameAttrs} font-weight="700" fill="#111" stroke="#fff" stroke-width="${V.px(3).toFixed(3)}" paint-order="stroke" stroke-linejoin="round">${esc(name)}</text>
                 </g>`;
             }
-            return `<g class="sp${el.piece ? ' piece' : ''}" data-kind="${kind}" data-key="${el.key}" tabindex="0" role="button" aria-label="${esc(el.label)} ${esc(name)}" transform="${pos}">
+            const isSel = spSel.kind === kind && spSel.keys.has(el.key);
+            return `<g class="sp${el.piece ? ' piece' : ''}${isSel ? ' sel' : ''}" data-kind="${kind}" data-key="${el.key}" tabindex="0" role="button" aria-label="${esc(el.label)} ${esc(name)}" transform="${pos}">
                 <g transform="scale(${V.kc})">
+                    <circle class="halo" r="2.75" style="stroke-width:${(V.px(2.5) / V.kc).toFixed(3)}"/>
                     <circle r="${el.piece ? (1.9 - V.px(2) / V.kc).toFixed(3) : 1.9}" style="stroke-width:${(V.px(2) / V.kc).toFixed(3)}"/>
                     <text class="lb" y="${lbY}" text-anchor="middle" font-size="${lbSize}">${esc(el.label)}</text>
                 </g>
@@ -2609,7 +2623,13 @@
                      <button type="button" class="sp-act" data-act="rename" data-kind="${k.kind}">✏️ Rinomina</button>
                      <button type="button" class="sp-act" data-act="delete" data-kind="${k.kind}">🗑 Elimina</button></div>`
                 : `<div class="block-title">${k.title}</div>`;
-            return `<div class="sp-card">${head}<div class="sp-scroll" data-kind="${k.kind}"><div style="width:${w}px;max-width:100%;min-width:${Math.min(w, minW || w)}px;margin:0 auto">${spSVG(k.kind, false, w)}</div></div></div>`;
+            const tools = `<div class="sp-tools" data-kind="${k.kind}">
+                <button type="button" class="sp-act" data-act="selmode" data-kind="${k.kind}">☐ Seleziona</button>
+                <button type="button" class="sp-act sel-only" data-act="selall" data-kind="${k.kind}">Tutte</button>
+                <button type="button" class="sp-act sel-only" data-act="selnone" data-kind="${k.kind}">Nessuna</button>
+                <span class="sel-hint">Tocca le pedine o trascina un riquadro · poi trascinane una o usa le frecce</span>
+            </div>`;
+            return `<div class="sp-card">${head}${tools}<div class="sp-scroll" data-kind="${k.kind}"><div style="width:${w}px;max-width:100%;min-width:${Math.min(w, minW || w)}px;margin:0 auto">${spSVG(k.kind, false, w)}</div></div></div>`;
         }).join('');
         // se lo schema scorre, si parte dalla zona utile: lato del pallone
         // nelle punizioni, centro dell'area nei corner
@@ -2622,6 +2642,7 @@
         });
         scrollToUseful();
         setTimeout(scrollToUseful, 60);
+        updateSelUI();
     }
     window.addEventListener('resize', () => {
         clearTimeout(renderSetPieces.t);
@@ -2636,62 +2657,251 @@
         d.setPos[kind][key] = pos;
     }
 
+    // ---- SELEZIONE MULTIPLA DELLE PEDINE ----
+    // Una selezione alla volta (in un solo schema). Si seleziona:
+    // - con "Seleziona" (anche al tocco): tocco = aggiungi/togli, trascinando
+    //   su una zona vuota si disegna un riquadro;
+    // - col mouse: Maiusc/Ctrl + clic, o trascinando su una zona vuota.
+    // Le pedine selezionate si spostano insieme trascinandone una o con
+    // le frecce (Maiusc + freccia = passo più lungo).
+    const spSel = { kind: null, keys: new Set(), mode: false };
+    function updateSelUI() {
+        spGrid.querySelectorAll('.sp-card').forEach(card => {
+            const kind = card.querySelector('.sp-tools').dataset.kind;
+            const mine = spSel.kind === kind;
+            const n = mine ? spSel.keys.size : 0;
+            card.classList.toggle('selecting', mine && spSel.mode);
+            card.classList.toggle('has-sel', n > 0);
+            const b = card.querySelector('[data-act="selmode"]');
+            b.classList.toggle('on', mine && spSel.mode);
+            b.textContent = mine && spSel.mode ? `✓ Fine${n ? ' (' + n + ')' : ''}` : (n ? `☑ ${n} selezionate` : '☐ Seleziona');
+            card.querySelectorAll('.sp').forEach(g => g.classList.toggle('sel', mine && spSel.keys.has(g.dataset.key)));
+        });
+    }
+    function setSelKind(kind) {
+        if (spSel.kind !== kind) { spSel.kind = kind; spSel.keys = new Set(); spSel.mode = false; }
+    }
+    function clearSpSel() { spSel.kind = null; spSel.keys = new Set(); spSel.mode = false; updateSelUI(); }
+    spGrid.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-act^="sel"]');
+        if (!b) return;
+        const kind = b.dataset.kind;
+        setSelKind(kind);
+        if (b.dataset.act === 'selmode') {
+            spSel.mode = !spSel.mode;
+            if (!spSel.mode) spSel.keys = new Set();
+        } else if (b.dataset.act === 'selall') {
+            spSel.keys = new Set(spElements(kind).map(el => el.key));
+        } else {
+            spSel.keys = new Set();
+        }
+        updateSelUI();
+    });
+
+    // Conversioni: posizione in metri ↔ coordinate dell'SVG dello schema
+    function spMapper(kind) {
+        const V = spView(kind);
+        const mx = pwMap(V.mx), my = pwMap(V.my);
+        const c = customOf(kind);
+        const rot = !!(c && c.type === 'full');      // campo intero orizzontale
+        return {
+            // svg → disegno non ruotato (inverso di (x, y) → (105 − y, x))
+            toDrawn: (px, py) => rot ? [py, 105 - px] : [px, py],
+            toSvg: (X, Y) => rot ? [105 - Y, X] : [X, Y],
+            clamp: (X, Y) => [Math.max(mx.min + 1, Math.min(mx.max - 1, X)), Math.max(my.min + 1, Math.min(my.max - 1, Y))],
+            fwd: (pos) => [mx.fwd(pos.x), my.fwd(pos.y)],
+            inv: (X, Y) => ({ x: mx.inv(X), y: my.inv(Y) })
+        };
+    }
+    const svgPoint = (svg, e) => new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+
+    // sposta le pedine indicate di (dX, dY) nel disegno; ognuna resta nel campo
+    function moveSpGroup(kind, keys, dX, dY) {
+        const M = spMapper(kind);
+        spElements(kind).filter(el => keys.has(el.key)).forEach(el => {
+            const [X, Y] = M.fwd(el);
+            const [cx, cy] = M.clamp(X + dX, Y + dY);
+            storeSpPos(kind, el.key, M.inv(cx, cy));
+        });
+    }
+
     let spDrag = null;
+    let lasso = null;
     spGrid.addEventListener('pointerdown', (e) => {
         const g = e.target.closest('.sp, .sp-ball, .sp-note');
-        if (!g) return;
+        const svg = e.target.closest('.sp-svg');
+        if (!g) {
+            // riquadro di selezione: in modalità "Seleziona" o col mouse
+            const scroll = e.target.closest('.sp-scroll');
+            if (!svg || !scroll) return;
+            const kind = scroll.dataset.kind;
+            const selecting = spSel.mode && spSel.kind === kind;
+            if (!selecting && e.pointerType !== 'mouse') return;
+            if (e.button) return;
+            e.preventDefault();
+            svg.setPointerCapture(e.pointerId);
+            const p = svgPoint(svg, e);
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('class', 'lasso');
+            rect.setAttribute('vector-effect', 'non-scaling-stroke');
+            svg.appendChild(rect);
+            lasso = { svg, kind, rect, x0: p.x, y0: p.y, cx0: e.clientX, cy0: e.clientY, pointerId: e.pointerId,
+                      add: e.shiftKey || e.ctrlKey || e.metaKey || selecting };
+            return;
+        }
         e.preventDefault();
         g.setPointerCapture(e.pointerId);
         // distanza tra il punto preso e l'origine dell'elemento, così
         // trascinando non "salta" sotto il dito (importante per la nota)
-        const svg = g.ownerSVGElement;
-        const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+        const pt = svgPoint(g.ownerSVGElement, e);
         const m = g.transform.baseVal.consolidate().matrix;
-        spDrag = { g, kind: g.dataset.kind, key: g.dataset.key, x0: e.clientX, y0: e.clientY, moved: false, pointerId: e.pointerId,
-                   offX: pt.x - m.e, offY: pt.y - m.f };
+        const kind = g.dataset.kind, key = g.dataset.key;
+        const group = g.classList.contains('sp') && spSel.kind === kind && spSel.keys.has(key) && spSel.keys.size > 1;
+        spDrag = { g, kind, key, x0: e.clientX, y0: e.clientY, moved: false, pointerId: e.pointerId,
+                   offX: pt.x - m.e, offY: pt.y - m.f, group, mod: e.shiftKey || e.ctrlKey || e.metaKey };
+        if (group) {
+            // posizione di partenza (nel disegno) di ogni pedina selezionata
+            const M = spMapper(kind);
+            spDrag.start = M.toDrawn(pt.x, pt.y);
+            spDrag.members = [...spGrid.querySelectorAll(`.sp[data-kind="${kind}"]`)]
+                .filter(el => spSel.keys.has(el.dataset.key))
+                .map(el => {
+                    const mm = el.transform.baseVal.consolidate().matrix;
+                    return { el, key: el.dataset.key, d: M.toDrawn(mm.e, mm.f) };
+                });
+        }
     });
     spGrid.addEventListener('pointermove', (e) => {
+        if (lasso && e.pointerId === lasso.pointerId) {
+            const p = svgPoint(lasso.svg, e);
+            const x = Math.min(p.x, lasso.x0), y = Math.min(p.y, lasso.y0);
+            lasso.rect.setAttribute('x', x); lasso.rect.setAttribute('y', y);
+            lasso.rect.setAttribute('width', Math.abs(p.x - lasso.x0)); lasso.rect.setAttribute('height', Math.abs(p.y - lasso.y0));
+            lasso.box = { x1: x, y1: y, x2: x + Math.abs(p.x - lasso.x0), y2: y + Math.abs(p.y - lasso.y0) };
+            return;
+        }
         if (!spDrag || e.pointerId !== spDrag.pointerId) return;
         if (!spDrag.moved && Math.hypot(e.clientX - spDrag.x0, e.clientY - spDrag.y0) < 6) return;
         spDrag.moved = true;
         spDrag.g.classList.add('dragging');
         const svg = spDrag.g.ownerSVGElement;
-        const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+        const pt = svgPoint(svg, e);
+        const M = spMapper(spDrag.kind);
+        if (spDrag.group) {
+            const [X, Y] = M.toDrawn(pt.x, pt.y);
+            const dX = X - spDrag.start[0], dY = Y - spDrag.start[1];
+            spDrag.members.forEach(m => {
+                const [cx, cy] = M.clamp(m.d[0] + dX, m.d[1] + dY);
+                const [sx, sy] = M.toSvg(cx, cy);
+                m.el.setAttribute('transform', `translate(${sx.toFixed(2)},${sy.toFixed(2)})`);
+            });
+            spDrag.delta = [dX, dY];
+            return;
+        }
         // si trascina solo dentro l'inquadratura; si salva in metri reali
-        const mx = pwMap(spView(spDrag.kind).mx), my = pwMap(spView(spDrag.kind).my);
-        const c = customOf(spDrag.kind);
-        const rot = !!(c && c.type === 'full');      // campo intero orizzontale
-        const px = pt.x - spDrag.offX, py = pt.y - spDrag.offY;
-        // coordinate dello schema → coordinate disegnate (inverso di (x, y) → (105 − y, x))
-        const dx = rot ? py : px, dy = rot ? 105 - px : py;
-        const X = Math.max(mx.min + 1, Math.min(mx.max - 1, dx));
-        const Y = Math.max(my.min + 1, Math.min(my.max - 1, dy));
-        const [sx, sy] = rot ? [105 - Y, X] : [X, Y];
+        const [dx, dy] = M.toDrawn(pt.x - spDrag.offX, pt.y - spDrag.offY);
+        const [X, Y] = M.clamp(dx, dy);
+        const [sx, sy] = M.toSvg(X, Y);
         spDrag.g.setAttribute('transform', `translate(${sx.toFixed(2)},${sy.toFixed(2)})`);
-        spDrag.pos = { x: mx.inv(X), y: my.inv(Y) };
+        spDrag.pos = M.inv(X, Y);
     });
+    function endLasso(e) {
+        const l = lasso;
+        lasso = null;
+        l.rect.remove();
+        const small = Math.hypot(e.clientX - l.cx0, e.clientY - l.cy0) < 6;
+        setSelKind(l.kind);
+        if (small) {
+            // clic su una zona vuota: col mouse toglie la selezione
+            if (!l.add) spSel.keys = new Set();
+        } else if (l.box) {
+            if (!l.add) spSel.keys = new Set();
+            l.svg.querySelectorAll('.sp').forEach(g => {
+                const m = g.transform.baseVal.consolidate().matrix;
+                if (m.e >= l.box.x1 && m.e <= l.box.x2 && m.f >= l.box.y1 && m.f <= l.box.y2) spSel.keys.add(g.dataset.key);
+            });
+        }
+        if (!spSel.keys.size && !spSel.mode) spSel.kind = null;
+        updateSelUI();
+    }
     function endSpDrag(e) {
+        if (lasso && e.pointerId === lasso.pointerId) { endLasso(e); return; }
         if (!spDrag || e.pointerId !== spDrag.pointerId) return;
         const d = spDrag;
         spDrag = null;
-        if (d.moved && d.pos) {
+        const isPiece = d.g.classList.contains('sp');
+        if (d.moved && d.group && d.delta) {
+            moveSpGroup(d.kind, spSel.keys, d.delta[0], d.delta[1]);
+            save();
+            renderSetPieces();
+        } else if (d.moved && d.pos) {
             storeSpPos(d.kind, d.key, d.pos);
             save();
             renderSetPieces();
-        } else if (e.type === 'pointerup' && d.key === 'note') {
+        } else if (e.type !== 'pointerup') {
+            return;
+        } else if (isPiece && ((spSel.mode && spSel.kind === d.kind) || d.mod)) {
+            // tocco in modalità selezione (o Maiusc/Ctrl + clic): aggiungi/togli
+            setSelKind(d.kind);
+            if (spSel.keys.has(d.key)) spSel.keys.delete(d.key); else spSel.keys.add(d.key);
+            if (!spSel.keys.size && !spSel.mode) spSel.kind = null;
+            updateSelUI();
+        } else if (d.key === 'note') {
             openNoteEditor(d.kind);
-        } else if (e.type === 'pointerup' && d.key !== 'ball') {
+        } else if (d.key !== 'ball') {
             openSpEditor(d.kind, d.key);
         }
     }
     spGrid.addEventListener('pointerup', endSpDrag);
     spGrid.addEventListener('pointercancel', endSpDrag);
-    blockTouchScroll(spGrid, '.sp, .sp-ball, .sp-note', () => !!spDrag);
+    blockTouchScroll(spGrid, '.sp, .sp-ball, .sp-note', () => !!spDrag || !!lasso);
+    // in modalità selezione il dito disegna il riquadro invece di scorrere
+    spGrid.addEventListener('touchstart', (e) => {
+        const sc = e.target.closest && e.target.closest('.sp-scroll');
+        if (sc && spSel.mode && spSel.kind === sc.dataset.kind && e.target.closest('.sp-svg')) e.preventDefault();
+    }, { passive: false });
     spGrid.addEventListener('keydown', (e) => {
         const n = e.target.closest('.sp-note');
         if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openNoteEditor(n.dataset.kind); return; }
         const g = e.target.closest('.sp');
         if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openSpEditor(g.dataset.kind, g.dataset.key); }
+    });
+    // Frecce: spostano le pedine selezionate (o quella col focus).
+    // Passo 0,5 m, con Maiusc 2 m (nel disegno).
+    document.addEventListener('keydown', (e) => {
+        const dirs = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+        if (e.key === 'Escape' && spSel.kind && !document.querySelector('.modal.open, .pl-editor.open')) { clearSpSel(); return; }
+        const dir = dirs[e.key];
+        if (!dir || e.altKey || e.ctrlKey || e.metaKey) return;
+        const a = document.activeElement;
+        if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')) return;
+        if (document.querySelector('.modal.open, .pl-editor.open')) return;
+        let kind, keys;
+        const focused = a && a.closest && a.closest('#spGrid .sp');
+        if (spSel.kind && spSel.keys.size && (!focused || spSel.keys.has(focused.dataset.key))) {
+            kind = spSel.kind; keys = spSel.keys;
+        } else if (focused) {
+            kind = focused.dataset.kind; keys = new Set([focused.dataset.key]);
+        } else return;
+        e.preventDefault();
+        const step = e.shiftKey ? 2 : 0.5;
+        // nel campo intero orizzontale lo schermo è ruotato: si muove come si vede
+        const c = customOf(kind);
+        let [dX, dY] = [dir[0] * step, dir[1] * step];
+        if (c && c.type === 'full') [dX, dY] = [dY, -dX];
+        moveSpGroup(kind, keys, dX, dY);
+        save();
+        const focusKey = focused && focused.dataset.key;
+        const sc = spGrid.querySelector(`.sp-scroll[data-kind="${kind}"]`);
+        const left = sc ? sc.scrollLeft : 0;
+        renderSetPieces();
+        // dopo il ridisegno si torna dov'eravamo (scorrimento e focus)
+        const sc2 = spGrid.querySelector(`.sp-scroll[data-kind="${kind}"]`);
+        if (sc2) { sc2.scrollLeft = left; setTimeout(() => { sc2.scrollLeft = left; }, 70); }
+        if (focusKey) {
+            const el = spGrid.querySelector(`.sp[data-kind="${kind}"][data-key="${focusKey}"]`);
+            if (el) el.focus({ preventScroll: true });
+        }
     });
 
     function openSpEditor(kind, key) {
