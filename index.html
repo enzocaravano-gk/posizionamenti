@@ -512,6 +512,17 @@
         .sp-card.selecting .sp-svg { cursor: crosshair; touch-action: none; }
         .sp-svg g.sp circle.halo { display: none; fill: none; stroke: #f0a500; stroke-dasharray: 0.9 0.6; }
         .sp-svg g.sp.sel circle.halo { display: inline; }
+        /* frecce sugli schemi e sul campo */
+        .arw { cursor: grab; touch-action: none; }
+        .arw.dragging { cursor: grabbing; }
+        .arw .arw-hit { stroke: transparent; fill: none; }
+        .arw .arw-h { fill: #fff; stroke: var(--accent); }
+        .arw:hover .arw-line, .arw.dragging .arw-line { stroke: var(--accent); }
+        .arw:hover .arw-head, .arw.dragging .arw-head { fill: var(--accent); }
+        .pitch-head .arw-btns { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+        .arw-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+        .arw-choice .btn { padding: 11px 10px; font-size: 14px; }
+        .arw-choice .btn.on { background: var(--accent); color: #fff; }
         .sp-svg .lasso { fill: rgba(240, 165, 0, 0.12); stroke: #f0a500; stroke-dasharray: 4 3; }
         .sp-type { font-size: 12px; color: #777; }
         .sp-act {
@@ -806,6 +817,10 @@
         <div class="pitch-head">
             <h2>CAMPO</h2>
             <span class="text-muted">Tocca un giocatore per cambiare numero e nome · trascinalo per spostarlo</span>
+            <span class="arw-btns">
+                <button type="button" class="btn btn-outline" data-arrow="solid" data-area="pitch">➝ Freccia</button>
+                <button type="button" class="btn btn-outline" data-arrow="dash" data-area="pitch">⇢ Tratteggiata</button>
+            </span>
             <button type="button" class="btn btn-outline" id="resetPitchBtn">↺ Ripristina posizioni</button>
         </div>
         <div class="pitch-wrap" id="pitchWrap"></div>
@@ -887,6 +902,21 @@
 </div>
 
 <!-- SCELTA TIPO DI CAMPO PER UN NUOVO SCHEMA -->
+<div class="pl-editor" id="arrowEditor" aria-hidden="true">
+    <div class="pl-card">
+        <h3>Freccia</h3>
+        <div class="arw-choice">
+            <button type="button" class="btn btn-outline" data-set="solid">➝ Continua</button>
+            <button type="button" class="btn btn-outline" data-set="dash">⇢ Tratteggiata</button>
+            <button type="button" class="btn btn-outline" data-set="flip">⇄ Inverti verso</button>
+            <button type="button" class="btn btn-outline" data-set="del">🗑 Elimina</button>
+        </div>
+        <div class="row-btns">
+            <button type="button" class="btn btn-primary" id="arrowDone" style="flex:1">Fatto</button>
+        </div>
+    </div>
+</div>
+
 <div class="pl-editor" id="schemeChooser" aria-hidden="true">
     <div class="pl-card">
         <h3>Nuovo schema · scegli il campo</h3>
@@ -1064,6 +1094,10 @@
             spNotes: { ccdx: '', ccsx: '', cfdx: '', cfsx: '', pdx: '', psx: '', pc: '' },
             // schemi personalizzati: [{ id, title, type: 'half' | 'full' }]
             customSchemes: [],
+            // frecce: schemi { kind: [{ a: {x, y}, b: {x, y}, dash }] } in metri reali;
+            // campo { modulo: [{ a: {lx, dy}, b: {lx, dy}, dash }] } come i pallini
+            spArrows: {},
+            pitchArrows: {},
             // numero e nome delle pedine in più: { cc: { x0: { num, name } } }
             spPieces: {}
         };
@@ -1142,6 +1176,8 @@
                         c && typeof c.id === 'string' && typeof c.title === 'string' && (c.type === 'half' || c.type === 'full'));
                 }
                 if (sd && sd.spPieces && typeof sd.spPieces === 'object') state.data[m].spPieces = sd.spPieces;
+                if (sd && sd.spArrows && typeof sd.spArrows === 'object') state.data[m].spArrows = sd.spArrows;
+                if (sd && sd.pitchArrows && typeof sd.pitchArrows === 'object') state.data[m].pitchArrows = sd.pitchArrows;
                 if (sd && sd.spNotes && typeof sd.spNotes === 'object') {
                     Object.keys(sd.spNotes).forEach(k => {
                         if (typeof sd.spNotes[k] === 'string') state.data[m].spNotes[k] = sd.spNotes[k];
@@ -1981,6 +2017,31 @@
             <path d="M0,1 A1,1 0 0,0 1,0 M104,0 A1,1 0 0,0 105,1 M105,67 A1,1 0 0,0 104,68 M1,68 A1,1 0 0,0 0,67"/>`;
     }
 
+    // ---- FRECCE ----
+    // Disegno comune a campo e schemi. list = [{ x1, y1, x2, y2, dash, i }]
+    // in coordinate dell'SVG; U = unità SVG per pixel (spessori e punta in
+    // px fissi, come i pallini). Nell'app: linea larga invisibile per la
+    // presa e due maniglie alle estremità.
+    function arrowMarkup(a, U, print) {
+        const len = Math.hypot(a.x2 - a.x1, a.y2 - a.y1) || 0.001;
+        const ux = (a.x2 - a.x1) / len, uy = (a.y2 - a.y1) / len;
+        const hl = Math.min(13 * U, len * 0.6), hw = 5.5 * U;
+        const bx = a.x2 - ux * hl, by = a.y2 - uy * hl;
+        const f = (v) => v.toFixed(2);
+        const sw = (print ? 2.2 : 2.6) * U;
+        const dash = a.dash ? ` stroke-dasharray="${f(7 * U)} ${f(5 * U)}"` : '';
+        const line = `<line class="arw-line" x1="${f(a.x1)}" y1="${f(a.y1)}" x2="${f(bx)}" y2="${f(by)}" stroke="#111" stroke-width="${f(sw)}"${dash} stroke-linecap="${a.dash ? 'butt' : 'round'}"/>`;
+        const head = `<path class="arw-head" d="M${f(a.x2)},${f(a.y2)} L${f(bx - uy * hw)},${f(by + ux * hw)} L${f(bx + uy * hw)},${f(by - ux * hw)} Z" fill="#111"/>`;
+        if (print) return line + head;
+        return `<line class="arw-hit" x1="${f(a.x1)}" y1="${f(a.y1)}" x2="${f(a.x2)}" y2="${f(a.y2)}" stroke-width="${f(22 * U)}"/>` + line + head +
+            `<circle class="arw-h" data-end="a" cx="${f(a.x1)}" cy="${f(a.y1)}" r="${f(6 * U)}" stroke-width="${f(2 * U)}"/>` +
+            `<circle class="arw-h" data-end="b" cx="${f(a.x2)}" cy="${f(a.y2)}" r="${f(6 * U)}" stroke-width="${f(2 * U)}" fill-opacity="0.6"/>`;
+    }
+    function arrowsSVG(list, U, print, area, kind) {
+        return list.map(a => print ? arrowMarkup(a, U, true)
+            : `<g class="arw" data-area="${area}" data-kind="${kind || ''}" data-i="${a.i}">${arrowMarkup(a, U, false)}</g>`).join('');
+    }
+
     function pitchSVG(opts) {
         const vertical = !!opts.vertical;
         const print = !!opts.print;
@@ -2006,9 +2067,15 @@
             </g>`;
         }).join('');
         const size = print ? ' width="834" height="561"' : '';
+        // unità SVG per pixel: stampa 834 px per 113 m; app = larghezza reale
+        const U = print ? 113 / 834 : (vertical ? 76 : 113) / (pitchWrap.clientWidth || 600);
+        const arrows = arrowsSVG((cur().pitchArrows[cur().formation] || []).map((a, i) => {
+            const p1 = toXY(a.a, vertical), p2 = toXY(a.b, vertical);
+            return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, dash: a.dash, i };
+        }), U, print, 'pitch');
         return `<svg class="pitch-svg"${size} viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
             <g fill="none" stroke="#111" stroke-width="0.3"${linesTransform}>${pitchLines()}</g>
-            ${players}
+            ${arrows}${players}
         </svg>`;
     }
 
@@ -2549,6 +2616,11 @@
             <defs><clipPath id="${clip}"><rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}"/></clipPath></defs>
             <g clip-path="url(#${clip})">
                 <g fill="none" stroke="#111" stroke-width="${lineW.toFixed(3)}"${rotLines}>${spLines(V, V.px(3))}</g>
+                ${arrowsSVG(((d.spArrows || {})[kind] || []).map((a, i) => {
+                    const [x1, y1] = V.T(V.mx.fwd(a.a.x), V.my.fwd(a.a.y));
+                    const [x2, y2] = V.T(V.mx.fwd(a.b.x), V.my.fwd(a.b.y));
+                    return { x1, y1, x2, y2, dash: a.dash, i };
+                }), V.px(1), print, 'sp', kind)}
                 ${balls}${els}${spNoteSVG(kind, V, print)}
             </g>
         </svg>`;
@@ -2627,6 +2699,8 @@
                 <button type="button" class="sp-act" data-act="selmode" data-kind="${k.kind}">☐ Seleziona</button>
                 <button type="button" class="sp-act sel-only" data-act="selall" data-kind="${k.kind}">Tutte</button>
                 <button type="button" class="sp-act sel-only" data-act="selnone" data-kind="${k.kind}">Nessuna</button>
+                <button type="button" class="sp-act" data-arrow="solid" data-area="sp" data-kind="${k.kind}">➝ Freccia</button>
+                <button type="button" class="sp-act" data-arrow="dash" data-area="sp" data-kind="${k.kind}">⇢ Tratteggiata</button>
                 <span class="sel-hint">Tocca le pedine o trascina un riquadro · poi trascinane una o usa le frecce</span>
             </div>`;
             return `<div class="sp-card">${head}${tools}<div class="sp-scroll" data-kind="${k.kind}"><div style="width:${w}px;max-width:100%;min-width:${Math.min(w, minW || w)}px;margin:0 auto">${spSVG(k.kind, false, w)}</div></div></div>`;
@@ -2728,6 +2802,7 @@
     let spDrag = null;
     let lasso = null;
     spGrid.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.arw')) return;
         const g = e.target.closest('.sp, .sp-ball, .sp-note');
         const svg = e.target.closest('.sp-svg');
         if (!g) {
@@ -2904,6 +2979,148 @@
         }
     });
 
+    // ---- FRECCE: AGGIUNTA, TRASCINAMENTO, MODIFICA ----
+    // Si aggiungono al centro della parte visibile; poi si trascinano
+    // (tutta la freccia o un'estremità). Un tocco apre la modifica.
+    function arrowCtx(area, kind) {
+        const d = cur();
+        if (area === 'pitch') {
+            return {
+                list: () => (d.pitchArrows[d.formation] = d.pitchArrows[d.formation] || []),
+                toSvg: (p) => { const q = toXY(p, pitchVertical); return [q.x, q.y]; },
+                fromSvg: (x, y) => fromXY(x, y, pitchVertical),
+                svg: () => pitchWrap.querySelector('svg'),
+                view: () => pitchWrap,
+                rerender: renderPitch
+            };
+        }
+        const M = spMapper(kind);
+        return {
+            list: () => { d.spArrows = d.spArrows || {}; return (d.spArrows[kind] = d.spArrows[kind] || []); },
+            toSvg: (p) => M.toSvg(...M.fwd(p)),
+            fromSvg: (x, y) => M.inv(...M.clamp(...M.toDrawn(x, y))),
+            svg: () => spGrid.querySelector(`.sp-scroll[data-kind="${kind}"] svg`),
+            view: () => spGrid.querySelector(`.sp-scroll[data-kind="${kind}"]`),
+            rerender: () => {
+                const sc = spGrid.querySelector(`.sp-scroll[data-kind="${kind}"]`);
+                const left = sc ? sc.scrollLeft : 0;
+                renderSetPieces();
+                const sc2 = spGrid.querySelector(`.sp-scroll[data-kind="${kind}"]`);
+                if (sc2) { sc2.scrollLeft = left; setTimeout(() => { sc2.scrollLeft = left; }, 70); }
+            }
+        };
+    }
+    function addArrow(area, kind, dash) {
+        const ctx = arrowCtx(area, kind);
+        const svg = ctx.svg();
+        if (!svg) return;
+        const sb = svg.getBoundingClientRect(), vb = ctx.view().getBoundingClientRect();
+        const l = Math.max(sb.left, vb.left), r = Math.min(sb.right, vb.right);
+        const list = ctx.list();
+        // al centro della parte visibile, un po' più in basso per ogni nuova freccia
+        const cx = (l + r) / 2, cy = sb.top + sb.height * (0.42 + (list.length % 4) * 0.08);
+        const half = Math.min(r - l, sb.height) * 0.14;
+        const inv = svg.getScreenCTM().inverse();
+        const p1 = new DOMPoint(cx - half, cy).matrixTransform(inv), p2 = new DOMPoint(cx + half, cy).matrixTransform(inv);
+        list.push({ a: ctx.fromSvg(p1.x, p1.y), b: ctx.fromSvg(p2.x, p2.y), dash });
+        save();
+        ctx.rerender();
+        showToast('Trascina la freccia o le sue estremità · toccala per cambiarla');
+    }
+    document.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-arrow]');
+        if (b) addArrow(b.dataset.area, b.dataset.kind, b.dataset.arrow === 'dash');
+    });
+
+    let arwDrag = null;
+    function onArrowDown(e) {
+        const g = e.target.closest('.arw');
+        if (!g) return;
+        e.preventDefault();
+        e.stopPropagation();
+        g.setPointerCapture(e.pointerId);
+        const area = g.dataset.area, kind = g.dataset.kind, i = +g.dataset.i;
+        const ctx = arrowCtx(area, kind);
+        const a = ctx.list()[i];
+        if (!a) return;
+        const svg = g.ownerSVGElement;
+        const pt = svgPoint(svg, e);
+        const h = e.target.closest('.arw-h');
+        arwDrag = { g, svg, ctx, i, area, kind, end: h ? h.dataset.end : null, pointerId: e.pointerId,
+                    cx0: e.clientX, cy0: e.clientY, p0: [pt.x, pt.y], A: ctx.toSvg(a.a), B: ctx.toSvg(a.b), moved: false,
+                    U: (svg.viewBox.baseVal.width || 100) / (svg.getBoundingClientRect().width || 1) };
+    }
+    function onArrowMove(e) {
+        const d = arwDrag;
+        if (!d || e.pointerId !== d.pointerId) return;
+        if (!d.moved && Math.hypot(e.clientX - d.cx0, e.clientY - d.cy0) < 6) return;
+        d.moved = true;
+        d.g.classList.add('dragging');
+        const pt = svgPoint(d.svg, e);
+        const dx = pt.x - d.p0[0], dy = pt.y - d.p0[1];
+        let A = d.A, B = d.B;
+        if (d.end === 'a') A = [pt.x, pt.y];
+        else if (d.end === 'b') B = [pt.x, pt.y];
+        else { A = [d.A[0] + dx, d.A[1] + dy]; B = [d.B[0] + dx, d.B[1] + dy]; }
+        // si salva nei dati (che tengono la freccia dentro il campo) e si ridisegna solo lei
+        d.na = d.ctx.fromSvg(A[0], A[1]);
+        d.nb = d.ctx.fromSvg(B[0], B[1]);
+        const [x1, y1] = d.ctx.toSvg(d.na), [x2, y2] = d.ctx.toSvg(d.nb);
+        d.g.innerHTML = arrowMarkup({ x1, y1, x2, y2, dash: d.ctx.list()[d.i].dash }, d.U, false);
+    }
+    function onArrowUp(e) {
+        const d = arwDrag;
+        if (!d || e.pointerId !== d.pointerId) return;
+        arwDrag = null;
+        if (d.moved && d.na) {
+            const a = d.ctx.list()[d.i];
+            a.a = d.na; a.b = d.nb;
+            save();
+            d.ctx.rerender();
+        } else if (e.type === 'pointerup') {
+            openArrowEditor(d.area, d.kind, d.i);
+        }
+    }
+    [spGrid, pitchWrap].forEach(c => {
+        c.addEventListener('pointerdown', onArrowDown, true);
+        c.addEventListener('pointermove', onArrowMove);
+        c.addEventListener('pointerup', onArrowUp);
+        c.addEventListener('pointercancel', onArrowUp);
+        blockTouchScroll(c, '.arw', () => !!arwDrag);
+    });
+
+    const arrowEditor = $('arrowEditor');
+    let arwEdit = null;
+    function openArrowEditor(area, kind, i) {
+        arwEdit = { area, kind, i };
+        const a = arrowCtx(area, kind).list()[i];
+        arrowEditor.querySelector('[data-set="solid"]').classList.toggle('on', !a.dash);
+        arrowEditor.querySelector('[data-set="dash"]').classList.toggle('on', !!a.dash);
+        arrowEditor.classList.add('open');
+        arrowEditor.setAttribute('aria-hidden', 'false');
+    }
+    function closeArrowEditor() {
+        arrowEditor.classList.remove('open');
+        arrowEditor.setAttribute('aria-hidden', 'true');
+        arwEdit = null;
+    }
+    arrowEditor.addEventListener('click', (e) => {
+        if (e.target === arrowEditor || e.target.id === 'arrowDone') { closeArrowEditor(); return; }
+        const b = e.target.closest('[data-set]');
+        if (!b || !arwEdit) return;
+        const ctx = arrowCtx(arwEdit.area, arwEdit.kind);
+        const list = ctx.list(), a = list[arwEdit.i];
+        if (!a) return;
+        const act = b.dataset.set;
+        if (act === 'del') list.splice(arwEdit.i, 1);
+        else if (act === 'flip') [a.a, a.b] = [a.b, a.a];
+        else a.dash = act === 'dash';
+        save();
+        ctx.rerender();
+        if (act === 'del' || act === 'flip') closeArrowEditor();
+        else openArrowEditor(arwEdit.area, arwEdit.kind, arwEdit.i);
+    });
+
     function openSpEditor(kind, key) {
         const el = spElements(kind).find(x => x.key === key);
         if (!el) return;
@@ -2959,6 +3176,7 @@
         delete d.setPos[id];
         delete d.spNotes[id];
         if (d.spPieces) delete d.spPieces[id];
+        if (d.spArrows) delete d.spArrows[id];
         save();
         renderSetPieces();
     }
@@ -3232,6 +3450,7 @@
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && modal.classList.contains('open')) closePreview();
         if (e.key === 'Escape' && rosterModal.classList.contains('open')) closeRoster();
+        if (e.key === 'Escape' && arrowEditor.classList.contains('open')) closeArrowEditor();
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); openPreview(); }
     });
 
