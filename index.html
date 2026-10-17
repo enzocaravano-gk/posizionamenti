@@ -2045,6 +2045,35 @@
             // ✕ accanto al centro della freccia, di lato
             delBadge((a.x1 + a.x2) / 2 - uy * 15 * U, (a.y1 + a.y2) / 2 + ux * 15 * U, U, 'data-del="arrow"');
     }
+    // Logo della società piccolo nell'angolo in alto a destra dei campi
+    // (app e PDF). B = viewBox, U = unità SVG per pixel, size in px.
+    // Se lì c'è il pallone o una pedina, il logo si sposta un po' a sinistra.
+    // Nell'app è un'<image> dentro l'SVG; nel PDF html2canvas non disegna le
+    // immagini interne agli SVG, quindi lì diventa un <img> sopra il disegno.
+    function logoPlace(B, U, size, obstacles) {
+        const src = logoImg.getAttribute('src');
+        if (!src) return null;
+        const s = size * U, m = 4 * U;
+        let x = B.x + B.w - s - m;
+        const y = B.y + m;
+        const hit = (x0) => (obstacles || []).some(o =>
+            o.x + o.r > x0 - m && o.x - o.r < x0 + s + m && o.y + o.r > y - m && o.y - o.r < y + s + m);
+        for (let k = 0; k < 6 && hit(x); k++) x -= s * 0.6;
+        return { src, x, y, s };
+    }
+    function logoSVG(L) {
+        if (!L) return '';
+        return `<image href="${L.src}" x="${L.x.toFixed(2)}" y="${L.y.toFixed(2)}" width="${L.s.toFixed(2)}" height="${L.s.toFixed(2)}" preserveAspectRatio="xMaxYMin meet" style="pointer-events:none"/>`;
+    }
+    // per la stampa: svg + <img> posizionato in px (proporzioni del logo)
+    function withPrintLogo(svg, L, B, U) {
+        if (!L) return svg;
+        const nw = logoImg.naturalWidth || 1, nh = logoImg.naturalHeight || 1;
+        const box = L.s / U;
+        const w = nw >= nh ? box : box * nw / nh, h = nw >= nh ? box * nh / nw : box;
+        const left = (L.x - B.x) / U + box - w, top = (L.y - B.y) / U;
+        return `<div style="position:relative;display:inline-block;line-height:0">${svg}<img src="${L.src}" alt="" style="position:absolute;left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;width:${w.toFixed(1)}px;height:${h.toFixed(1)}px"/></div>`;
+    }
     // pulsantino ✕ (solo nell'app), r in px fissi tramite U
     function delBadge(x, y, U, attrs) {
         const r = 8.5 * U, c = 3.2 * U;
@@ -2084,14 +2113,19 @@
         const size = print ? ' width="834" height="561"' : '';
         // unità SVG per pixel: stampa 834 px per 113 m; app = larghezza reale
         const U = print ? 113 / 834 : (vertical ? 76 : 113) / (pitchWrap.clientWidth || 600);
+        const PB = { x: -4, y: -4, w: vertical ? 76 : 113, h: vertical ? 113 : 76 };
+        const logoL = logoPlace(PB, U, print ? 40 : 30,
+            getSlots().map(sl => { const q = toXY(sl, vertical); return { x: q.x, y: q.y, r: 3 }; }));
         const arrows = arrowsSVG((cur().pitchArrows[cur().formation] || []).map((a, i) => {
             const p1 = toXY(a.a, vertical), p2 = toXY(a.b, vertical);
             return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, dash: a.dash, i };
         }), U, print, 'pitch');
-        return `<svg class="pitch-svg"${size} viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+        const svgStr = `<svg class="pitch-svg"${size} viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
             <g fill="none" stroke="#111" stroke-width="0.3"${linesTransform}>${pitchLines()}</g>
+            ${print ? '' : logoSVG(logoL)}
             ${arrows}${players}
         </svg>`;
+        return print ? withPrintLogo(svgStr, logoL, PB, U) : svgStr;
     }
 
     // ---- TOCCO SU TELEFONO (Android/Chrome) ----
@@ -2635,10 +2669,12 @@
         const B = V.vb;
         const size = print ? ` width="${Math.round(B.w * V.scale)}" height="${Math.round(B.h * V.scale)}"` : '';
         const rotLines = V.rot ? ' transform="translate(105,0) rotate(90)"' : '';
-        return `<svg class="sp-svg"${size} viewBox="${B.x} ${B.y} ${B.w} ${B.h}" style="overflow:hidden" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+        const logoL = logoPlace(B, V.px(1), print ? 40 : 30, ballPts.concat(items.map(it => ({ x: it.ex, y: it.ey, r }))));
+        const svgStr = `<svg class="sp-svg"${size} viewBox="${B.x} ${B.y} ${B.w} ${B.h}" style="overflow:hidden" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
             <defs><clipPath id="${clip}"><rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}"/></clipPath></defs>
             <g clip-path="url(#${clip})">
                 <g fill="none" stroke="#111" stroke-width="${lineW.toFixed(3)}"${rotLines}>${spLines(V, V.px(3))}</g>
+                ${print ? '' : logoSVG(logoL)}
                 ${arrowsSVG(((d.spArrows || {})[kind] || []).map((a, i) => {
                     const [x1, y1] = V.T(V.mx.fwd(a.a.x), V.my.fwd(a.a.y));
                     const [x2, y2] = V.T(V.mx.fwd(a.b.x), V.my.fwd(a.b.y));
@@ -2647,6 +2683,7 @@
                 ${balls}${els}${spNoteSVG(kind, V, print)}
             </g>
         </svg>`;
+        return print ? withPrintLogo(svgStr, logoL, B, V.px(1)) : svgStr;
     }
 
     // ---- NOTA SUGLI SCHEMI ----
@@ -3341,6 +3378,8 @@
         const reader = new FileReader();
         reader.onload = (ev) => {
             setLogo(ev.target.result);
+            renderPitch();
+            renderSetPieces();
             hamburgerDropdown.classList.remove('open');
             try { localStorage.setItem('clubLogoData', ev.target.result); }
             catch (_) { alert('Logo troppo grande per il salvataggio automatico. Verrà mantenuto solo per questa sessione.'); }
@@ -3349,6 +3388,8 @@
     });
     $('removeLogoBtn').addEventListener('click', () => {
         setLogo('');
+        renderPitch();
+        renderSetPieces();
         try { localStorage.removeItem('clubLogoData'); } catch (_) {}
         hamburgerDropdown.classList.remove('open');
     });
