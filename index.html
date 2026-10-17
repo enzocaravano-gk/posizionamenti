@@ -517,6 +517,11 @@
         .arw.dragging { cursor: grabbing; }
         .arw .arw-hit { stroke: transparent; fill: none; }
         .arw .arw-h { fill: #fff; stroke: var(--accent); }
+        /* pulsantino ✕ per eliminare frecce e note */
+        .del-x { cursor: pointer; }
+        .del-x circle { fill: var(--accent); stroke: #fff; }
+        .del-x path { stroke: #fff; fill: none; stroke-linecap: round; }
+        .del-x:hover circle { fill: var(--accent-dark); }
         .arw:hover .arw-line, .arw.dragging .arw-line { stroke: var(--accent); }
         .arw:hover .arw-head, .arw.dragging .arw-head { fill: var(--accent); }
         .pitch-head .arw-btns { display: inline-flex; gap: 8px; flex-wrap: wrap; }
@@ -990,9 +995,10 @@
             </label>
         </div>
         <label class="nt" id="plNoteWrap">Nota
-            <textarea id="plNote" rows="4" placeholder="Scrivi qui… (lascia vuoto per eliminarla)"></textarea>
+            <textarea id="plNote" rows="4" placeholder="Scrivi qui…"></textarea>
         </label>
         <div class="row-btns">
+            <button type="button" class="btn btn-outline" id="plDelete" hidden>🗑 Elimina</button>
             <button type="button" class="btn btn-outline" id="plCancel">Annulla</button>
             <button type="submit" class="btn btn-primary">Salva</button>
         </div>
@@ -2035,7 +2041,16 @@
         if (print) return line + head;
         return `<line class="arw-hit" x1="${f(a.x1)}" y1="${f(a.y1)}" x2="${f(a.x2)}" y2="${f(a.y2)}" stroke-width="${f(22 * U)}"/>` + line + head +
             `<circle class="arw-h" data-end="a" cx="${f(a.x1)}" cy="${f(a.y1)}" r="${f(6 * U)}" stroke-width="${f(2 * U)}"/>` +
-            `<circle class="arw-h" data-end="b" cx="${f(a.x2)}" cy="${f(a.y2)}" r="${f(6 * U)}" stroke-width="${f(2 * U)}" fill-opacity="0.6"/>`;
+            `<circle class="arw-h" data-end="b" cx="${f(a.x2)}" cy="${f(a.y2)}" r="${f(6 * U)}" stroke-width="${f(2 * U)}" fill-opacity="0.6"/>` +
+            // ✕ accanto al centro della freccia, di lato
+            delBadge((a.x1 + a.x2) / 2 - uy * 15 * U, (a.y1 + a.y2) / 2 + ux * 15 * U, U, 'data-del="arrow"');
+    }
+    // pulsantino ✕ (solo nell'app), r in px fissi tramite U
+    function delBadge(x, y, U, attrs) {
+        const r = 8.5 * U, c = 3.2 * U;
+        return `<g class="del-x" ${attrs} transform="translate(${x.toFixed(2)},${y.toFixed(2)})" role="button" aria-label="Elimina">` +
+            `<circle r="${r.toFixed(2)}" stroke-width="${(1.5 * U).toFixed(2)}"/>` +
+            `<path d="M${-c},${-c} L${c},${c} M${c},${-c} L${-c},${c}" stroke-width="${(1.8 * U).toFixed(2)}"/></g>`;
     }
     function arrowsSVG(list, U, print, area, kind) {
         return list.map(a => print ? arrowMarkup(a, U, true)
@@ -2187,6 +2202,7 @@
         plNum.value = opts.num || '';
         plName.value = opts.name || '';
         if (opts.noList) plName.removeAttribute('list'); else plName.setAttribute('list', 'playersList');
+        $('plDelete').hidden = !opts.onDelete;
         plEditor.classList.add('open');
         plEditor.setAttribute('aria-hidden', 'false');
         setTimeout(() => (isNote ? $('plNote') : plName).focus(), 50);
@@ -2211,6 +2227,13 @@
         render();
     });
     $('plCancel').addEventListener('click', closePlayerEditor);
+    $('plDelete').addEventListener('click', () => {
+        if (!editor || !editor.onDelete) return;
+        editor.onDelete();
+        save();
+        closePlayerEditor();
+        render();
+    });
     plEditor.addEventListener('click', (e) => { if (e.target === plEditor) closePlayerEditor(); });
 
     function openPlayerEditor(i) {
@@ -2685,12 +2708,19 @@
                 : `<rect width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="#fff" stroke="#999" stroke-width="${sw}" stroke-dasharray="${V.px(5).toFixed(2)} ${V.px(4).toFixed(2)}"/>
                    <text font-size="${fs.toFixed(2)}" fill="#999" font-weight="700">${tspans}</text>`;
             if (print) return `<g transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}</g>`;
-            return `<g class="sp-note" data-kind="${kind}" data-key="${notePosKey(n)}" tabindex="0" role="button" aria-label="Nota" transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}</g>`;
+            const del = text ? delBadge(w, 0, V.px(1), `data-del="note" data-kind="${kind}" data-key="${notePosKey(n)}"`) : '';
+            return `<g class="sp-note" data-kind="${kind}" data-key="${notePosKey(n)}" tabindex="0" role="button" aria-label="Nota" transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}${del}</g>`;
         }).join('');
     }
 
     // key = 'note', 'note1', … ; senza key si crea una nota nuova.
     // Salvando una nota vuota la si elimina.
+    function deleteNote(kind, n) {
+        const d = cur();
+        const tk = noteTextKey(kind, n);
+        if (n) delete d.spNotes[tk]; else d.spNotes[tk] = '';
+        if (d.setPos[kind]) delete d.setPos[kind][notePosKey(n)];
+    }
     function openNoteEditor(kind, key) {
         const d = cur();
         let n;
@@ -2704,10 +2734,10 @@
             title: `Nota · ${spTitle(kind)}`,
             note: d.spNotes[tk] || '',
             onSave: (num, name, note) => {
-                if (note) { d.spNotes[tk] = note; return; }
-                if (n) delete d.spNotes[tk]; else d.spNotes[tk] = '';
-                if (d.setPos[kind]) delete d.setPos[kind][notePosKey(n)];
-            }
+                if (note) d.spNotes[tk] = note;
+                else deleteNote(kind, n);
+            },
+            onDelete: (d.spNotes[tk] || '').trim() ? () => deleteNote(kind, n) : null
         });
     }
 
@@ -2837,6 +2867,16 @@
     let spDrag = null;
     let lasso = null;
     spGrid.addEventListener('pointerdown', (e) => {
+        const dn = e.target.closest('.del-x[data-del="note"]');
+        if (dn) {
+            e.preventDefault();
+            if (!confirm('Eliminare questa nota?')) return;
+            const key = dn.dataset.key;
+            deleteNote(dn.dataset.kind, key === 'note' ? 0 : +key.slice(4));
+            save();
+            renderSetPieces();
+            return;
+        }
         if (e.target.closest('.arw')) return;
         const g = e.target.closest('.sp, .sp-ball, .sp-note');
         const svg = e.target.closest('.sp-svg');
@@ -3073,6 +3113,14 @@
         if (!g) return;
         e.preventDefault();
         e.stopPropagation();
+        if (e.target.closest('.del-x')) {
+            if (!confirm('Eliminare questa freccia?')) return;
+            const ctx = arrowCtx(g.dataset.area, g.dataset.kind);
+            ctx.list().splice(+g.dataset.i, 1);
+            save();
+            ctx.rerender();
+            return;
+        }
         g.setPointerCapture(e.pointerId);
         const area = g.dataset.area, kind = g.dataset.kind, i = +g.dataset.i;
         const ctx = arrowCtx(area, kind);
