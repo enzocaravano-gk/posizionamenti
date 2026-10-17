@@ -112,6 +112,8 @@
             padding: 0;
             font-family: inherit;
         }
+        .coach-name { display: block; font-size: 13px; color: #555; margin-bottom: 4px; word-break: break-word; }
+        .coach-name:empty { display: none; }
         .color-swatches { display: flex; gap: 9px; flex-wrap: wrap; }
         .color-swatch {
             width: 26px;
@@ -415,6 +417,12 @@
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             display: flex;
             flex-direction: column;
+        }
+        .sheet { position: relative; }
+        /* firma dell'allenatore: piccola e grigio chiaro in fondo al foglio */
+        .sh-sign {
+            position: absolute; right: 34px; bottom: 6px;
+            font-size: 10.5px; color: #b0b0b0; letter-spacing: 0.3px; white-space: nowrap;
         }
         .sh-head {
             display: flex;
@@ -743,6 +751,11 @@
                     <label class="menu-label" for="logoUpload">⬆️ Carica logo</label>
                     <input type="file" id="logoUpload" accept="image/*" />
                     <button type="button" class="link-btn" id="removeLogoBtn" style="margin-top:8px">✕ Rimuovi logo</button>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-label">✍️ Firma allenatore</span>
+                    <span class="coach-name" id="coachNameLbl"></span>
+                    <button type="button" class="link-btn" id="coachBtn">Aggiungi nome allenatore</button>
                 </div>
                 <div class="menu-item">
                     <span class="menu-label">🎨 Colore squadra</span>
@@ -3386,6 +3399,35 @@
         };
         reader.readAsDataURL(file);
     });
+    // ---- FIRMA DELL'ALLENATORE ----
+    // Nome e cognome salvati su questo dispositivo; compaiono in fondo a
+    // ogni pagina del PDF.
+    const COACH_KEY = 'posizionamentiCoach';
+    let coachName = '';
+    try { coachName = (localStorage.getItem(COACH_KEY) || '').trim(); } catch (_) {}
+    function updateCoachUI() {
+        $('coachNameLbl').textContent = coachName;
+        $('coachBtn').textContent = coachName ? 'Modifica nome' : 'Aggiungi nome allenatore';
+    }
+    updateCoachUI();
+    $('coachBtn').addEventListener('click', () => {
+        hamburgerDropdown.classList.remove('open');
+        openEditor({
+            title: 'Firma allenatore',
+            nameLabel: 'Nome e cognome', name: coachName, noList: true,
+            onSave: (num, name) => {
+                coachName = name.replace(/\s+/g, ' ').trim();
+                try { coachName ? localStorage.setItem(COACH_KEY, coachName) : localStorage.removeItem(COACH_KEY); } catch (_) {}
+                updateCoachUI();
+            },
+            onDelete: coachName ? () => {
+                coachName = '';
+                try { localStorage.removeItem(COACH_KEY); } catch (_) {}
+                updateCoachUI();
+            } : null
+        });
+    });
+
     $('removeLogoBtn').addEventListener('click', () => {
         setLogo('');
         renderPitch();
@@ -3444,6 +3486,12 @@
         // poi una pagina per ogni schema personalizzato
         $('extraFrames').innerHTML = (cur().customSchemes || []).map(c =>
             `<div class="preview-frame"><div class="sheet sp-sheet">${sheetHead(esc(c.title))}<div class="sh-sp">${spSVG(c.id, true)}</div></div></div>`).join('');
+        // firma dell'allenatore in fondo a ogni pagina
+        if (coachName) {
+            scaler.querySelectorAll('.sheet').forEach(sh => {
+                sh.insertAdjacentHTML('beforeend', `<div class="sh-sign">Allenatore: ${esc(coachName)}</div>`);
+            });
+        }
     }
 
     // zoom = null → adatta alla larghezza dello schermo
