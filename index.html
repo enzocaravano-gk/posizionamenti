@@ -1090,7 +1090,7 @@
             // posizioni personalizzate negli schemi palle inattive:
             // { cc: { palo: { x, y } }, cf: {...}, pdx: {...}, psx: {...} }
             setPos: {},
-            // nota libera su ogni schema (la posizione sta in setPos[kind].note)
+            // note libere sugli schemi: spNotes[kind], spNotes[kind + '~1'], … (posizioni in setPos[kind].note, .note1, …)
             spNotes: { ccdx: '', ccsx: '', cfdx: '', cfsx: '', pdx: '', psx: '', pc: '' },
             // schemi personalizzati: [{ id, title, type: 'half' | 'full' }]
             customSchemes: [],
@@ -2642,40 +2642,72 @@
         });
         return out;
     }
+    // Più note per schema. La prima è spNotes[kind] (posizione setPos[kind].note),
+    // le altre spNotes[kind + '~' + n] (posizione setPos[kind]['note' + n]).
+    const noteTextKey = (kind, n) => n ? kind + '~' + n : kind;
+    const notePosKey = (n) => n ? 'note' + n : 'note';
+    function spNoteList(kind) {
+        const notes = cur().spNotes;
+        const out = [];
+        if ((notes[kind] || '').trim()) out.push({ n: 0, text: notes[kind].trim() });
+        Object.keys(notes).forEach(k => {
+            const m = k.startsWith(kind + '~') && /^\d+$/.exec(k.slice(kind.length + 1));
+            if (m && (notes[k] || '').trim()) out.push({ n: +m[0], text: notes[k].trim() });
+        });
+        return out.sort((a, b) => a.n - b.n);
+    }
     function spNoteSVG(kind, V, print) {
-        const text = (cur().spNotes[kind] || '').trim();
-        if (!text && print) return '';      // nota vuota: non si stampa
-        const fs = V.px(print ? 16 : 14), pad = V.px(8), lh = fs * 1.3;
-        const lines = text ? wrapText(text, 34) : ['+ Nota'];
-        const maxLen = Math.max(...lines.map(l => l.length), 6);
-        const w = maxLen * fs * 0.56 + pad * 2;
-        const h = lines.length * lh - (lh - fs) + pad * 2;
-        const saved = cur().setPos[kind] && cur().setPos[kind].note;
-        // senza posizione salvata: in basso a sinistra, sopra la fila di pedine
-        const X0 = saved ? V.mx.fwd(saved.x) : V.x0 + V.px(6);
-        const Y0 = saved ? V.my.fwd(saved.y) : V.y1 - V.h * 0.1 - V.px(50) - h;
-        // il riquadro (sempre diritto) resta dentro l'inquadratura della pagina
-        const [TX, TY] = V.T(X0, Y0);
-        const B = V.vb;
-        const X = Math.max(B.x, Math.min(B.x + B.w - w, TX));
-        const Y = Math.max(B.y, Math.min(B.y + B.h - h, TY));
-        const tspans = lines.map((l, i) =>
-            `<tspan x="${pad.toFixed(2)}" y="${(pad + fs * 0.85 + i * lh).toFixed(2)}">${esc(l)}</tspan>`).join('');
-        const sw = V.px(print ? 1.2 : 1.5).toFixed(3);
-        const box = text
-            ? `<rect width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="#fff" stroke="#111" stroke-width="${sw}"/>
-               <text font-size="${fs.toFixed(2)}" fill="#111">${tspans}</text>`
-            : `<rect width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="#fff" stroke="#999" stroke-width="${sw}" stroke-dasharray="${V.px(5).toFixed(2)} ${V.px(4).toFixed(2)}"/>
-               <text font-size="${fs.toFixed(2)}" fill="#999" font-weight="700">${tspans}</text>`;
-        if (print) return `<g transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}</g>`;
-        return `<g class="sp-note" data-kind="${kind}" data-key="note" tabindex="0" role="button" aria-label="Nota" transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}</g>`;
+        const list = spNoteList(kind);
+        // senza note: nell'app il riquadro "+ Nota" per aggiungerne una
+        if (!list.length && !print) list.push({ n: 0, text: '' });
+        return list.map(({ n, text }) => {
+            const fs = V.px(print ? 16 : 14), pad = V.px(8), lh = fs * 1.3;
+            const lines = text ? wrapText(text, 34) : ['+ Nota'];
+            const maxLen = Math.max(...lines.map(l => l.length), 6);
+            const w = maxLen * fs * 0.56 + pad * 2;
+            const h = lines.length * lh - (lh - fs) + pad * 2;
+            const saved = cur().setPos[kind] && cur().setPos[kind][notePosKey(n)];
+            // senza posizione salvata: in basso a sinistra, sopra la fila di
+            // pedine; ogni nota nuova un po' più in alto e a destra
+            const X0 = saved ? V.mx.fwd(saved.x) : V.x0 + V.px(6 + (n % 5) * 30);
+            const Y0 = saved ? V.my.fwd(saved.y) : V.y1 - V.h * 0.1 - V.px(50 + (n % 5) * 44) - h;
+            // il riquadro (sempre diritto) resta dentro l'inquadratura della pagina
+            const [TX, TY] = V.T(X0, Y0);
+            const B = V.vb;
+            const X = Math.max(B.x, Math.min(B.x + B.w - w, TX));
+            const Y = Math.max(B.y, Math.min(B.y + B.h - h, TY));
+            const tspans = lines.map((l, i) =>
+                `<tspan x="${pad.toFixed(2)}" y="${(pad + fs * 0.85 + i * lh).toFixed(2)}">${esc(l)}</tspan>`).join('');
+            const sw = V.px(print ? 1.2 : 1.5).toFixed(3);
+            const box = text
+                ? `<rect width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="#fff" stroke="#111" stroke-width="${sw}"/>
+                   <text font-size="${fs.toFixed(2)}" fill="#111">${tspans}</text>`
+                : `<rect width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="#fff" stroke="#999" stroke-width="${sw}" stroke-dasharray="${V.px(5).toFixed(2)} ${V.px(4).toFixed(2)}"/>
+                   <text font-size="${fs.toFixed(2)}" fill="#999" font-weight="700">${tspans}</text>`;
+            if (print) return `<g transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}</g>`;
+            return `<g class="sp-note" data-kind="${kind}" data-key="${notePosKey(n)}" tabindex="0" role="button" aria-label="Nota" transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}</g>`;
+        }).join('');
     }
 
-    function openNoteEditor(kind) {
+    // key = 'note', 'note1', … ; senza key si crea una nota nuova.
+    // Salvando una nota vuota la si elimina.
+    function openNoteEditor(kind, key) {
+        const d = cur();
+        let n;
+        if (key) n = key === 'note' ? 0 : +key.slice(4);
+        else {
+            n = 0;
+            while ((d.spNotes[noteTextKey(kind, n)] || '').trim()) n++;
+        }
+        const tk = noteTextKey(kind, n);
         openEditor({
             title: `Nota · ${spTitle(kind)}`,
-            note: cur().spNotes[kind] || '',
-            onSave: (num, name, note) => { cur().spNotes[kind] = note; }
+            note: d.spNotes[tk] || '',
+            onSave: (num, name, note) => {
+                if (note) { d.spNotes[tk] = note; return; }
+                if (n) delete d.spNotes[tk]; else d.spNotes[tk] = '';
+                if (d.setPos[kind]) delete d.setPos[kind][notePosKey(n)];
+            }
         });
     }
 
@@ -2699,6 +2731,7 @@
                 <button type="button" class="sp-act" data-act="selmode" data-kind="${k.kind}">☐ Seleziona</button>
                 <button type="button" class="sp-act sel-only" data-act="selall" data-kind="${k.kind}">Tutte</button>
                 <button type="button" class="sp-act sel-only" data-act="selnone" data-kind="${k.kind}">Nessuna</button>
+                <button type="button" class="sp-act" data-act="addnote" data-kind="${k.kind}">📝 Nota</button>
                 <button type="button" class="sp-act" data-arrow="solid" data-area="sp" data-kind="${k.kind}">➝ Freccia</button>
                 <button type="button" class="sp-act" data-arrow="dash" data-area="sp" data-kind="${k.kind}">⇢ Tratteggiata</button>
                 <span class="sel-hint">Tocca le pedine o trascina un riquadro · poi trascinane una o usa le frecce</span>
@@ -2757,6 +2790,8 @@
     }
     function clearSpSel() { spSel.kind = null; spSel.keys = new Set(); spSel.mode = false; updateSelUI(); }
     spGrid.addEventListener('click', (e) => {
+        const nb = e.target.closest('[data-act="addnote"]');
+        if (nb) { openNoteEditor(nb.dataset.kind); return; }
         const b = e.target.closest('[data-act^="sel"]');
         if (!b) return;
         const kind = b.dataset.kind;
@@ -2921,8 +2956,8 @@
             if (spSel.keys.has(d.key)) spSel.keys.delete(d.key); else spSel.keys.add(d.key);
             if (!spSel.keys.size && !spSel.mode) spSel.kind = null;
             updateSelUI();
-        } else if (d.key === 'note') {
-            openNoteEditor(d.kind);
+        } else if (d.key.startsWith('note')) {
+            openNoteEditor(d.kind, d.key);
         } else if (d.key !== 'ball') {
             openSpEditor(d.kind, d.key);
         }
@@ -2937,7 +2972,7 @@
     }, { passive: false });
     spGrid.addEventListener('keydown', (e) => {
         const n = e.target.closest('.sp-note');
-        if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openNoteEditor(n.dataset.kind); return; }
+        if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openNoteEditor(n.dataset.kind, n.dataset.key); return; }
         const g = e.target.closest('.sp');
         if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openSpEditor(g.dataset.kind, g.dataset.key); }
     });
@@ -3174,7 +3209,7 @@
         const d = cur();
         d.customSchemes = d.customSchemes.filter(x => x.id !== id);
         delete d.setPos[id];
-        delete d.spNotes[id];
+        Object.keys(d.spNotes).forEach(k => { if (k === id || k.startsWith(id + '~')) delete d.spNotes[k]; });
         if (d.spPieces) delete d.spPieces[id];
         if (d.spArrows) delete d.spArrows[id];
         save();
