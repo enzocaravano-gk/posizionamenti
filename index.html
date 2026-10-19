@@ -59,7 +59,13 @@
         .logo-placeholder { font-size: 13px; color: #888; }
 
         /* ---- HAMBURGER MENU ---- */
-        .hamburger-wrap { position: relative; margin-left: auto; }
+        .hamburger-wrap { position: relative; }
+        .lang-btn {
+            margin-left: auto; margin-right: 6px;
+            background: #fff; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 40px;
+            padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+        }
+        .lang-btn:hover { background: #fdf6f6; }
         .hamburger-btn {
             background: transparent;
             border: none;
@@ -744,6 +750,7 @@
             <img id="clubLogo" alt="Logo società" />
             <span class="logo-placeholder" id="logoPlaceholder">(logo non caricato)</span>
         </div>
+        <button type="button" class="lang-btn" id="langBtn">🌐 English</button>
         <div class="hamburger-wrap">
             <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">☰</button>
             <div class="hamburger-dropdown" id="hamburgerDropdown">
@@ -1022,6 +1029,103 @@
 (function() {
     'use strict';
 
+    // ---- LINGUA (italiano / inglese) ----
+    // I testi sono scritti in italiano nel codice; t() li traduce quando la
+    // lingua è l'inglese. {nome} = valori inseriti al volo.
+    const LANG_KEY = 'posizionamentiLang';
+    let lang = 'it';
+    try { if (localStorage.getItem(LANG_KEY) === 'en') lang = 'en'; } catch (_) {}
+    const EN = {
+        // pagina
+        'Posizionamenti': 'Positioning', 'POSIZIONAMENTI': 'POSITIONING',
+        'Logo società': 'Club logo', '(logo non caricato)': '(no logo uploaded)',
+        '⬆️ Carica logo': '⬆️ Upload logo', '✕ Rimuovi logo': '✕ Remove logo',
+        '✍️ Firma allenatore': '✍️ Coach signature', 'Aggiungi nome allenatore': 'Add coach name', 'Modifica nome': 'Edit name',
+        '🎨 Colore squadra': '🎨 Team colour', 'Granata': 'Maroon', 'Blu': 'Blue', 'Rosso': 'Red', 'Verde': 'Green', 'Azzurro': 'Light blue', 'Viola': 'Purple', 'Nero': 'Black',
+        'Calcio a 11': '11-a-side', 'Calcio a 9': '9-a-side',
+        'Avversario': 'Opponent', 'es. Milan': 'e.g. Milan', 'Data': 'Date', 'Tipo gara': 'Match type',
+        'Amichevole': 'Friendly', 'Campionato': 'League', 'Coppa': 'Cup', 'Torneo': 'Tournament', 'Altro': 'Other',
+        'Sede': 'Venue', '🏠 Casa': '🏠 Home', '🚌 Trasferta': '🚌 Away', '⚖️ Neutro': '⚖️ Neutral',
+        'Casa': 'Home', 'Trasferta': 'Away', 'Neutro': 'Neutral', 'Gara': 'Match',
+        'Modulo': 'Formation', '👥 Roster squadra': '👥 Team roster',
+        'Invio': 'Enter', 'Maiusc': 'Shift', 'Canc': 'Del',
+        'per spostarsi ·': 'to move ·', '+ frecce o trascina per selezionare più nomi ·': '+ arrows or drag to select several names ·',
+        'copia,': 'copy,', 'incolla ·': 'paste ·', 'svuota la selezione': 'clears the selection',
+        'CAMPO': 'PITCH', 'Tocca un giocatore per cambiare numero e nome · trascinalo per spostarlo': 'Tap a player to change number and name · drag to move',
+        '➝ Freccia': '➝ Arrow', '⇢ Tratteggiata': '⇢ Dashed', '↺ Ripristina posizioni': '↺ Reset positions',
+        'PALLE INATTIVE': 'SET PIECES', 'I nomi arrivano dalle tabelle · tocca per modificare · trascina per spostare': 'Names come from the tables · tap to edit · drag to move',
+        '📄 Salva PDF': '📄 Save PDF', '➕ Nuovo schema': '➕ New diagram', '🧹 Pulisci posizionamenti': '🧹 Clear positioning', '⟲ Reset completo': '⟲ Full reset',
+        'Anteprima · A4 orizzontale': 'Preview · A4 landscape', 'Riduci': 'Zoom out', 'Adatta': 'Fit', 'Ingrandisci': 'Zoom in',
+        '✕ Chiudi': '✕ Close', '✓ Conferma e salva': '✓ Confirm and save',
+        'Freccia': 'Arrow', '➝ Continua': '➝ Solid', '⇄ Inverti verso': '⇄ Reverse', '🗑 Elimina': '🗑 Delete', 'Fatto': 'Done',
+        'Nuovo schema · scegli il campo': 'New diagram · choose the pitch', 'Metà campo': 'Half pitch', 'Campo intero': 'Full pitch', 'Annulla': 'Cancel',
+        "I giocatori del roster compaiono nell'elenco quando compili le tabelle e, scegliendo un nome nella Formazione, il numero di maglia si mette da solo. Il roster resta salvato su questo dispositivo: esportalo per averne una copia o per passarlo ai collaboratori.":
+            'Roster players appear in the list when you fill in the tables, and picking a name in the Line-up fills in the shirt number automatically. The roster is saved on this device: export it to keep a copy or share it with your staff.',
+        '📂 Importa file': '📂 Import file', '📋 Incolla elenco': '📋 Paste list', '💾 Esporta': '💾 Export', '📤 Condividi': '📤 Share',
+        'Un giocatore per riga, ad esempio:\n1 Rossi\n7 Bianchi Marco\n10 Verdi (A)': 'One player per line, for example:\n1 Smith\n7 Brown John\n10 Jones (F)',
+        'Leggi elenco': 'Read list', 'Sostituisci roster': 'Replace roster', 'Aggiungi': 'Add', '＋ Aggiungi giocatore': '＋ Add player', '🗑 Svuota': '🗑 Empty',
+        'Giocatore': 'Player', 'Numero': 'Number', 'Nome': 'Name', 'Nota': 'Note', 'Scrivi qui…': 'Write here…', 'Salva': 'Save', 'Menu': 'Menu', 'Elimina': 'Delete',
+        // tabelle
+        'FORMAZIONE': 'LINE-UP', 'Titolare': 'Starter', 'PANCHINA': 'BENCH', 'Riserva': 'Substitute', 'Altro / staff': 'Other / staff',
+        'CALCI D’ANGOLO CONTRO': 'CORNERS AGAINST', 'PALO': 'POST', 'VERTICE': '6-YD BOX', 'MARCATORI': 'MARKERS', 'Marcatore': 'Marker',
+        'CALCI D’ANGOLO A FAVORE': 'CORNERS FOR', 'BATTITORE': 'TAKER', 'DX': 'R', 'SX': 'L', 'COPERTURA': 'COVER',
+        'PUNIZIONE CENTRALE': 'CENTRAL FREE KICK', 'INC.': 'PRESS',
+        'PUNIZIONI LATERALI DX': 'WIDE FREE KICKS RIGHT', 'PUNIZIONI LATERALI SX': 'WIDE FREE KICKS LEFT', 'LINEA DIFENSIVA': 'DEFENSIVE LINE',
+        'NOTE': 'NOTES', 'Indicazioni, consegne, palle inattive particolari…': 'Instructions, tasks, special set pieces…',
+        // schemi
+        'CALCI D’ANGOLO CONTRO DA DX': 'CORNERS AGAINST FROM RIGHT', 'CALCI D’ANGOLO CONTRO DA SX': 'CORNERS AGAINST FROM LEFT',
+        'CALCI D’ANGOLO A FAVORE DA DX': 'CORNERS FOR FROM RIGHT', 'CALCI D’ANGOLO A FAVORE DA SX': 'CORNERS FOR FROM LEFT',
+        'P': 'P', 'V': 'B', 'M': 'M', 'INC': 'PR',
+        '☐ Seleziona': '☐ Select', 'Tutte': 'All', 'Nessuna': 'None', '📝 Nota': '📝 Note',
+        'Tocca le pedine o trascina un riquadro · poi trascinane una o usa le frecce': 'Tap pieces or drag a box · then drag one or use the arrow keys',
+        '✓ Fine': '✓ Done', '{n} selezionate': '{n} selected', '+ Nota': '+ Note', '✏️ Rinomina': '✏️ Rename',
+        'SCHEMA': 'DIAGRAM', 'Titolo dello schema': 'Diagram title', 'Titolo': 'Title',
+        'Nota · {t}': 'Note · {t}', '{t} · Pedina': '{t} · Piece', 'Giocatore n° {n}': 'Player no. {n}',
+        // pdf
+        'SCHIERAMENTO': 'TEAM SHAPE', 'CALCIO A {n} · MODULO {f}': '{n}-A-SIDE · FORMATION {f}', 'Allenatore: {n}': 'Coach: {n}',
+        'Scheda': 'Sheet', 'Schieramento': 'Team shape', 'Pagine da salvare:': 'Pages to save:', 'Pagina': 'Page',
+        '✓ Salva {n} pagine': '✓ Save {n} pages', '✓ Salva 1 pagina': '✓ Save 1 page',
+        // messaggi
+        'Calcio a {m} · {s} titolari + {b} riserve · modulo {f}': '{m}-a-side · {s} starters + {b} subs · formation {f}',
+        '{n} giocatori nel roster · i nomi compaiono toccando le celle': '{n} players in the roster · names appear when you tap a cell',
+        'Crea la rosa una volta sola: poi scegli i nomi dall’elenco': 'Create your squad once, then pick names from the list',
+        '{name}: maglia n° {n}': '{name}: shirt no. {n}', ' · chi aveva il {n} ora ha il {o}': ' · whoever had {n} now has {o}',
+        "Il {n} c'era già: quella riga ora ha il {o}": '{n} was already used: that row now has {o}',
+        "Il {n} c'era già: tolto dall'altra riga": '{n} was already used: removed from the other row',
+        'N°': 'No.', 'Ruolo': 'Role', 'n° ': 'no. ',
+        'Nessun giocatore. Importa un file, incolla un elenco o aggiungili uno per uno.': 'No players. Import a file, paste a list or add them one by one.',
+        'Svuotare il roster? I nomi già inseriti nelle tabelle restano.': 'Empty the roster? Names already in the tables will stay.',
+        'Non ho trovato giocatori nel file. Serve un giocatore per riga, ad esempio "7 Rossi".': 'No players found in the file. Use one player per line, for example "7 Smith".',
+        'Non ho trovato giocatori nell\'elenco. Serve un giocatore per riga, ad esempio "7 Rossi".': 'No players found in the list. Use one player per line, for example "7 Smith".',
+        'Trovati {n} giocatori. Il roster ne ha già {r}: vuoi sostituirlo o aggiungere quelli nuovi?': '{n} players found. The roster already has {r}: replace it or add the new ones?',
+        'Roster: {n} giocatori': 'Roster: {n} players',
+        'Questo tipo di file non si può leggere. Da Excel, Numbers o Fogli Google usa "Salva come / Esporta → CSV", oppure copia le celle e usa "Incolla elenco".':
+            'This file type cannot be read. From Excel, Numbers or Google Sheets use "Save as / Export → CSV", or copy the cells and use "Paste list".',
+        'Non riesco a leggere il file.': 'Cannot read the file.', 'Il roster è vuoto.': 'The roster is empty.',
+        'Roster salvato in Download: {f}': 'Roster saved to Downloads: {f}', 'Roster squadra': 'Team roster',
+        'Cancellare tutti i posizionamenti del calcio a {m}?': 'Clear all the {m}-a-side positioning?',
+        'Resettare completamente la scheda (calcio a 11 e a 9)?': 'Fully reset the sheet (11-a-side and 9-a-side)?',
+        'Eliminare questa nota?': 'Delete this note?', 'Eliminare questa freccia?': 'Delete this arrow?', 'Eliminare lo schema "{t}"?': 'Delete the diagram "{t}"?',
+        'Trascina la freccia o le sue estremità · toccala per cambiarla': 'Drag the arrow or its ends · tap it to change it',
+        'Logo troppo grande per il salvataggio automatico. Verrà mantenuto solo per questa sessione.': 'Logo too large to be saved automatically. It will be kept for this session only.',
+        'Firma allenatore': 'Coach signature', 'Nome e cognome': 'First and last name',
+        'Libreria PDF non caricata. Riapri la pagina e riprova.': 'PDF library not loaded. Reopen the page and try again.',
+        'Scegli almeno una pagina da salvare.': 'Choose at least one page to save.',
+        'Errore durante la generazione del PDF. Riprova.': 'Error while creating the PDF. Please try again.',
+        'Pallone': 'Ball', '🌐 English': '🌐 English', '🌐 Italiano': '🌐 Italiano'
+    };
+    function t(str, vars) {
+        let out = lang === 'en' && Object.prototype.hasOwnProperty.call(EN, str) ? EN[str] : str;
+        if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m));
+        return out;
+    }
+    // ordinali: 1° 2° … / 1st 2nd …
+    function ord(n) {
+        if (lang !== 'en') return n + '°';
+        const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+
     // ---- CONFIGURAZIONE PER FORMATO ----
     // Il calcio a 9 ha meno uomini in barriera/linea e meno marcature
     // sui corner: le righe si adattano, la struttura resta quella del foglio.
@@ -1262,43 +1366,43 @@
         // FORMAZIONE
         let form = '';
         for (let i = 0; i < c.starters; i++) {
-            form += `<tr><td class="n">${plain('starterNums.' + i, editable ? '—' : '')}</td><td>${rost('starters.' + i, editable ? 'Titolare' : '')}</td></tr>`;
+            form += `<tr><td class="n">${plain('starterNums.' + i, editable ? '—' : '')}</td><td>${rost('starters.' + i, editable ? t('Titolare') : '')}</td></tr>`;
         }
-        form += `<tr><td class="sub" colspan="2">PANCHINA</td></tr>`;
+        form += `<tr><td class="sub" colspan="2">${t('PANCHINA')}</td></tr>`;
         for (let i = 0; i < c.bench; i++) {
-            form += `<tr><td class="n">${plain('benchNums.' + i, editable ? '—' : '')}</td><td>${rost('bench.' + i, editable ? 'Riserva' : '')}</td></tr>`;
+            form += `<tr><td class="n">${plain('benchNums.' + i, editable ? '—' : '')}</td><td>${rost('bench.' + i, editable ? t('Riserva') : '')}</td></tr>`;
         }
-        form += `<tr><td class="n">${plain('extraNum', editable ? '—' : '')}</td><td>${rost('extra', editable ? 'Altro / staff' : '')}</td></tr>`;
+        form += `<tr><td class="n">${plain('extraNum', editable ? '—' : '')}</td><td>${rost('extra', editable ? t('Altro / staff') : '')}</td></tr>`;
 
         // CALCI D'ANGOLO CONTRO
-        let cc = `<tr><td class="lbl">PALO</td><td>${val('cornerContro.palo')}</td></tr>
-                  <tr><td class="lbl">VERTICE</td><td>${val('cornerContro.vertice')}</td></tr>
-                  <tr><td class="sub" colspan="2">MARCATORI</td></tr>`;
+        let cc = `<tr><td class="lbl">${t('PALO')}</td><td>${val('cornerContro.palo')}</td></tr>
+                  <tr><td class="lbl">${t('VERTICE')}</td><td>${val('cornerContro.vertice')}</td></tr>
+                  <tr><td class="sub" colspan="2">${t('MARCATORI')}</td></tr>`;
         d.cornerContro.marcatori.forEach((_, i) => {
-            cc += `<tr><td class="lbl">${plain('cornerContro.marcatori.' + i + '.a', editable ? 'Avversario' : '')}</td><td>${val('cornerContro.marcatori.' + i + '.b', editable ? 'Marcatore' : '')}</td></tr>`;
+            cc += `<tr><td class="lbl">${plain('cornerContro.marcatori.' + i + '.a', editable ? t('Avversario') : '')}</td><td>${val('cornerContro.marcatori.' + i + '.b', editable ? t('Marcatore') : '')}</td></tr>`;
         });
 
         // CALCI D'ANGOLO A FAVORE
-        let cf = `<tr><td class="sub" colspan="2">BATTITORE</td></tr>
-                  <tr><td class="lbl">DX</td><td>${val('cornerFavore.dx')}</td></tr>
-                  <tr><td class="lbl">SX</td><td>${val('cornerFavore.sx')}</td></tr>
-                  <tr><td class="sub" colspan="2">COPERTURA</td></tr>`;
+        let cf = `<tr><td class="sub" colspan="2">${t('BATTITORE')}</td></tr>
+                  <tr><td class="lbl">${t('DX')}</td><td>${val('cornerFavore.dx')}</td></tr>
+                  <tr><td class="lbl">${t('SX')}</td><td>${val('cornerFavore.sx')}</td></tr>
+                  <tr><td class="sub" colspan="2">${t('COPERTURA')}</td></tr>`;
         d.cornerFavore.copertura.forEach((_, i) => {
-            cf += `<tr><td class="lbl">${i + 1}°</td><td>${val('cornerFavore.copertura.' + i)}</td></tr>`;
+            cf += `<tr><td class="lbl">${ord(i + 1)}</td><td>${val('cornerFavore.copertura.' + i)}</td></tr>`;
         });
 
         // PUNIZIONE CENTRALE
         let pc = '';
         d.punCentrale.barriera.forEach((_, i) => {
-            pc += `<tr><td class="n">${i + 1}°</td><td>${val('punCentrale.barriera.' + i)}</td></tr>`;
+            pc += `<tr><td class="n">${ord(i + 1)}</td><td>${val('punCentrale.barriera.' + i)}</td></tr>`;
         });
-        pc += `<tr><td class="n">INC.</td><td>${val('punCentrale.inc')}</td></tr>`;
+        pc += `<tr><td class="n">${t('INC.')}</td><td>${val('punCentrale.inc')}</td></tr>`;
 
         // PUNIZIONI LATERALI
         const pun = (key) => {
-            let h = `<tr><td class="n">1°</td><td>${val(key + '.p1')}</td></tr>
-                     <tr><td class="n">2°</td><td>${val(key + '.p2')}</td></tr>
-                     <tr><td class="sub" colspan="2">LINEA DIFENSIVA</td></tr>`;
+            let h = `<tr><td class="n">${ord(1)}</td><td>${val(key + '.p1')}</td></tr>
+                     <tr><td class="n">${ord(2)}</td><td>${val(key + '.p2')}</td></tr>
+                     <tr><td class="sub" colspan="2">${t('LINEA DIFENSIVA')}</td></tr>`;
             d[key].linea.forEach((_, i) => {
                 h += `<tr><td class="n">${i + 1}</td><td>${val(key + '.linea.' + i)}</td></tr>`;
             });
@@ -1306,24 +1410,24 @@
         };
 
         const note = editable
-            ? `<textarea data-path="note" placeholder="Indicazioni, consegne, palle inattive particolari…">${esc(d.note)}</textarea>`
+            ? `<textarea data-path="note" placeholder="${t('Indicazioni, consegne, palle inattive particolari…')}">${esc(d.note)}</textarea>`
             : `<div class="note-text">${esc(d.note)}</div>`;
 
         const colCls = editable ? 'col' : 'sh-col';
         const fillCls = editable ? 'col' : 'sh-col fill';
         return `
             <div class="${fillCls}">
-                <div>${title('FORMAZIONE')}${tbl('n', form)}</div>
+                <div>${title(t('FORMAZIONE'))}${tbl('n', form)}</div>
             </div>
             <div class="${colCls}">
-                <div>${title('CALCI D’ANGOLO CONTRO')}${tbl('lbl', cc)}</div>
-                <div>${title('CALCI D’ANGOLO A FAVORE')}${tbl('lbl', cf)}</div>
-                <div>${title('PUNIZIONE CENTRALE')}${tbl('n', pc)}</div>
-                <div class="note-box"><table class="grid"><tr><td class="sub">NOTE</td></tr></table>${note}</div>
+                <div>${title(t('CALCI D’ANGOLO CONTRO'))}${tbl('lbl', cc)}</div>
+                <div>${title(t('CALCI D’ANGOLO A FAVORE'))}${tbl('lbl', cf)}</div>
+                <div>${title(t('PUNIZIONE CENTRALE'))}${tbl('n', pc)}</div>
+                <div class="note-box"><table class="grid"><tr><td class="sub">${t('NOTE')}</td></tr></table>${note}</div>
             </div>
             <div class="${fillCls}">
-                <div>${title('PUNIZIONI LATERALI DX')}${tbl('n', pun('punDx'))}</div>
-                <div>${title('PUNIZIONI LATERALI SX')}${tbl('n', pun('punSx'))}</div>
+                <div>${title(t('PUNIZIONI LATERALI DX'))}${tbl('n', pun('punDx'))}</div>
+                <div>${title(t('PUNIZIONI LATERALI SX'))}${tbl('n', pun('punSx'))}</div>
             </div>`;
     }
 
@@ -1335,19 +1439,19 @@
         const names = [...d.starters, ...d.bench, d.extra].map(s => s.trim()).filter(Boolean);
         const used = new Set(names.map(n => n.toLowerCase()));
         const rosterNames = roster.map(p => p.name.trim()).filter(Boolean);
-        const optLabel = (p) => [p.num && 'n° ' + p.num, p.role].filter(Boolean).join(' · ');
+        const optLabel = (p) => [p.num && t('n° ') + p.num, p.role].filter(Boolean).join(' · ');
         playersList.innerHTML = [...new Set(names.concat(rosterNames.filter(n => !used.has(n.toLowerCase()))))]
             .map(n => `<option value="${esc(n)}"></option>`).join('');
         $('rosterList').innerHTML = roster.filter(p => p.name.trim() && !used.has(p.name.trim().toLowerCase()))
             .map(p => `<option value="${esc(p.name.trim())}" label="${esc(optLabel(p))}"></option>`).join('');
         $('rosterInfo').textContent = roster.length
-            ? `${roster.length} giocatori nel roster · i nomi compaiono toccando le celle`
-            : 'Crea la rosa una volta sola: poi scegli i nomi dall’elenco';
+            ? t('{n} giocatori nel roster · i nomi compaiono toccando le celle', { n: roster.length })
+            : t('Crea la rosa una volta sola: poi scegli i nomi dall’elenco');
     }
 
     function updateStatus() {
         const c = CONFIG[state.mode];
-        statusLabel.textContent = `Calcio a ${state.mode} · ${c.starters} titolari + ${c.bench} riserve · modulo ${cur().formation}`;
+        statusLabel.textContent = t('Calcio a {m} · {s} titolari + {b} riserve · modulo {f}', { m: state.mode, s: c.starters, b: c.bench, f: cur().formation });
     }
 
     function renderFormationOptions() {
@@ -1420,8 +1524,8 @@
         const stamp = toastStamp;
         commitInputs([numInp]);
         const swapped = stamp !== toastStamp;   // c'è stato uno scambio di numeri
-        showToast(`${inp.value.trim()}: maglia n° ${p.num.trim()}` +
-            (swapped ? (oldNum ? ` · chi aveva il ${p.num.trim()} ora ha il ${oldNum}` : '') : ''));
+        showToast(t('{name}: maglia n° {n}', { name: inp.value.trim(), n: p.num.trim() }) +
+            (swapped && oldNum ? t(' · chi aveva il {n} ora ha il {o}', { n: p.num.trim(), o: oldNum }) : ''));
     }
 
     // ---- ROSTER: FINESTRA ----
@@ -1445,15 +1549,15 @@
     function renderRosterRows() {
         const nums = roster.map(p => p.num.trim()).filter(Boolean);
         const dup = new Set(nums.filter((n, i) => nums.indexOf(n) !== i));
-        $('rosterRows').innerHTML = `<div class="r-row r-head"><span>N°</span><span>Nome</span><span>Ruolo</span><span></span></div>` +
+        $('rosterRows').innerHTML = `<div class="r-row r-head"><span>${t('N°')}</span><span>${t('Nome')}</span><span>${t('Ruolo')}</span><span></span></div>` +
             (roster.length ? roster.map((p, i) => `<div class="r-row">
-                <input class="r-num${dup.has(p.num.trim()) ? ' dup' : ''}" data-i="${i}" data-f="num" value="${esc(p.num)}" inputmode="numeric" maxlength="3" aria-label="Numero"/>
-                <input data-i="${i}" data-f="name" value="${esc(p.name)}" placeholder="Nome" aria-label="Nome"/>
-                <input data-i="${i}" data-f="role" value="${esc(p.role)}" placeholder="—" aria-label="Ruolo"/>
-                <button type="button" class="r-del" data-del="${i}" aria-label="Elimina">✕</button>
+                <input class="r-num${dup.has(p.num.trim()) ? ' dup' : ''}" data-i="${i}" data-f="num" value="${esc(p.num)}" inputmode="numeric" maxlength="3" aria-label="${t('Numero')}"/>
+                <input data-i="${i}" data-f="name" value="${esc(p.name)}" placeholder="${t('Nome')}" aria-label="${t('Nome')}"/>
+                <input data-i="${i}" data-f="role" value="${esc(p.role)}" placeholder="—" aria-label="${t('Ruolo')}"/>
+                <button type="button" class="r-del" data-del="${i}" aria-label="${t('Elimina')}">✕</button>
             </div>`).join('')
-            : `<div class="roster-empty">Nessun giocatore. Importa un file, incolla un elenco o aggiungili uno per uno.</div>`);
-        $('rosterTitle').textContent = `👥 Roster squadra${roster.length ? ' · ' + roster.length : ''}`;
+            : `<div class="roster-empty">${t('Nessun giocatore. Importa un file, incolla un elenco o aggiungili uno per uno.')}</div>`);
+        $('rosterTitle').textContent = t('👥 Roster squadra') + (roster.length ? ' · ' + roster.length : '');
     }
     $('rosterBtn').addEventListener('click', openRoster);
     $('rosterDoneBtn').addEventListener('click', closeRoster);
@@ -1485,7 +1589,7 @@
         last.focus();
     });
     $('rosterClearBtn').addEventListener('click', () => {
-        if (!roster.length || !confirm('Svuotare il roster? I nomi già inseriti nelle tabelle restano.')) return;
+        if (!roster.length || !confirm(t('Svuotare il roster? I nomi già inseriti nelle tabelle restano.'))) return;
         roster = [];
         saveRoster();
         renderRosterRows();
@@ -1535,11 +1639,11 @@
             const sep = sepOf(line);
             if (sep) {
                 const cells = splitCsv(line, sep);
-                const HEAD = /^(n|n°|nr|num|numero|maglia|#|nome|cognome|giocatore|nominativo|name|surname|ruolo|role|posizione)\.?$/i;
+                const HEAD = /^(n|n°|no|nr|num|number|numero|maglia|#|nome|cognome|giocatore|nominativo|name|surname|ruolo|role|posizione)\.?$/i;
                 if (!cells.some(isNumTok) && cells.filter(Boolean).length && cells.filter(Boolean).every(c => HEAD.test(c))) {
                     cols = { num: -1, role: -1, name: [] };
                     cells.forEach((c, i) => {
-                        if (/^(n|n°|nr|num|numero|maglia|#)\.?$/i.test(c)) cols.num = i;
+                        if (/^(n|n°|no|nr|num|number|numero|maglia|#)\.?$/i.test(c)) cols.num = i;
                         else if (/^(ruolo|role|posizione)$/i.test(c)) cols.role = i;
                         else if (/^(nome|cognome|giocatore|name|surname|nominativo)$/i.test(c)) cols.name.push(i);
                     });
@@ -1578,13 +1682,15 @@
     let pendingImport = null;
     function proposeImport(list, source) {
         if (!list.length) {
-            alert('Non ho trovato giocatori ' + source + '. Serve un giocatore per riga, ad esempio "7 Rossi".');
+            alert(source === 'file'
+                ? t('Non ho trovato giocatori nel file. Serve un giocatore per riga, ad esempio "7 Rossi".')
+                : t('Non ho trovato giocatori nell\'elenco. Serve un giocatore per riga, ad esempio "7 Rossi".'));
             return;
         }
         $('rosterPaste').hidden = true;
         if (!roster.length) { applyImport(list, true); return; }
         pendingImport = list;
-        $('rosterConfirmText').textContent = `Trovati ${list.length} giocatori. Il roster ne ha già ${roster.length}: vuoi sostituirlo o aggiungere quelli nuovi?`;
+        $('rosterConfirmText').textContent = t('Trovati {n} giocatori. Il roster ne ha già {r}: vuoi sostituirlo o aggiungere quelli nuovi?', { n: list.length, r: roster.length });
         $('rosterConfirm').hidden = false;
     }
     function applyImport(list, replace) {
@@ -1602,7 +1708,7 @@
         $('rosterConfirm').hidden = true;
         renderRosterRows();
         updatePlayersList();
-        showToast(`Roster: ${roster.length} giocatori`);
+        showToast(t('Roster: {n} giocatori', { n: roster.length }));
     }
     $('rosterReplace').addEventListener('click', () => pendingImport && applyImport(pendingImport, true));
     $('rosterMerge').addEventListener('click', () => pendingImport && applyImport(pendingImport, false));
@@ -1613,12 +1719,12 @@
         const f = e.target.files && e.target.files[0];
         if (!f) return;
         if (/\.(xlsx?|numbers|docx?|pdf)$/i.test(f.name)) {
-            alert('Questo tipo di file non si può leggere. Da Excel, Numbers o Fogli Google usa "Salva come / Esporta → CSV", oppure copia le celle e usa "Incolla elenco".');
+            alert(t('Questo tipo di file non si può leggere. Da Excel, Numbers o Fogli Google usa "Salva come / Esporta → CSV", oppure copia le celle e usa "Incolla elenco".'));
             return;
         }
         const rd = new FileReader();
-        rd.onload = () => proposeImport(parseRoster(rd.result), 'nel file');
-        rd.onerror = () => alert('Non riesco a leggere il file.');
+        rd.onload = () => proposeImport(parseRoster(rd.result), 'file');
+        rd.onerror = () => alert(t('Non riesco a leggere il file.'));
         rd.readAsText(f);
     });
     $('rosterPasteBtn').addEventListener('click', () => {
@@ -1628,13 +1734,13 @@
         $('rosterPasteText').focus();
     });
     $('rosterPasteCancel').addEventListener('click', () => { $('rosterPaste').hidden = true; });
-    $('rosterPasteOk').addEventListener('click', () => proposeImport(parseRoster($('rosterPasteText').value), 'nell\'elenco'));
+    $('rosterPasteOk').addEventListener('click', () => proposeImport(parseRoster($('rosterPasteText').value), 'list'));
 
     // ---- ROSTER: ESPORTA / CONDIVIDI ----
     // CSV con ";" e BOM: si riapre nell'app e anche in Excel italiano.
     function rosterCsv() {
         const q = (v) => /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-        return '\uFEFF' + ['Numero;Nome;Ruolo'].concat(roster.filter(p => p.name.trim())
+        return '\uFEFF' + [lang === 'en' ? 'Number;Name;Role' : 'Numero;Nome;Ruolo'].concat(roster.filter(p => p.name.trim())
             .map(p => [p.num.trim(), p.name.trim(), p.role.trim()].map(q).join(';'))).join('\r\n') + '\r\n';
     }
     function rosterFile() {
@@ -1642,7 +1748,7 @@
         return new File([rosterCsv()], `roster_${date}.csv`, { type: 'text/csv' });
     }
     $('rosterExportBtn').addEventListener('click', () => {
-        if (!roster.some(p => p.name.trim())) { alert('Il roster è vuoto.'); return; }
+        if (!roster.some(p => p.name.trim())) { alert(t('Il roster è vuoto.')); return; }
         const f = rosterFile();
         const url = URL.createObjectURL(f);
         const a = document.createElement('a');
@@ -1652,15 +1758,15 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-        showToast('Roster salvato in Download: ' + f.name);
+        showToast(t('Roster salvato in Download: {f}', { f: f.name }));
     });
     // "Condividi" solo dove il sistema lo permette (telefoni e tablet)
     try {
         if (navigator.canShare && navigator.canShare({ files: [rosterFile()] })) $('rosterShareBtn').hidden = false;
     } catch (_) {}
     $('rosterShareBtn').addEventListener('click', () => {
-        if (!roster.some(p => p.name.trim())) { alert('Il roster è vuoto.'); return; }
-        navigator.share({ files: [rosterFile()], title: 'Roster squadra' }).catch(() => {});
+        if (!roster.some(p => p.name.trim())) { alert(t('Il roster è vuoto.')); return; }
+        navigator.share({ files: [rosterFile()], title: t('Roster squadra') }).catch(() => {});
     });
 
     // ---- TABELLE: FRECCE, SELEZIONE MULTIPLA, COPIA/INCOLLA (PC) ----
@@ -1881,7 +1987,7 @@
     });
 
     $('clearBtn').addEventListener('click', () => {
-        if (!confirm(`Cancellare tutti i posizionamenti del calcio a ${state.mode}?`)) return;
+        if (!confirm(t('Cancellare tutti i posizionamenti del calcio a {m}?', { m: state.mode }))) return;
         const keep = cur().customSchemes || [];
         state.data[state.mode] = emptyModeData(state.mode);
         cur().customSchemes = keep;      // gli schemi personalizzati restano, svuotati
@@ -1890,7 +1996,7 @@
     });
 
     $('resetBtn').addEventListener('click', () => {
-        if (!confirm('Resettare completamente la scheda (calcio a 11 e a 9)?')) return;
+        if (!confirm(t('Resettare completamente la scheda (calcio a 11 e a 9)?'))) return;
         const mode = state.mode;
         state = emptyState();
         state.mode = mode;
@@ -1952,8 +2058,8 @@
             if (inp) inp.value = old;
             renameShirt(old, nw, true);
             showToast(old
-                ? `Il ${nw} c'era già: quella riga ora ha il ${old}`
-                : `Il ${nw} c'era già: tolto dall'altra riga`);
+                ? t("Il {n} c'era già: quella riga ora ha il {o}", { n: nw, o: old })
+                : t("Il {n} c'era già: tolto dall'altra riga", { n: nw }));
         } else if (/^starterNums\./.test(path)) {
             renameShirt(old, nw, false);
         }
@@ -2090,7 +2196,7 @@
     // pulsantino ✕ (solo nell'app), r in px fissi tramite U
     function delBadge(x, y, U, attrs) {
         const r = 8.5 * U, c = 3.2 * U;
-        return `<g class="del-x" ${attrs} transform="translate(${x.toFixed(2)},${y.toFixed(2)})" role="button" aria-label="Elimina">` +
+        return `<g class="del-x" ${attrs} transform="translate(${x.toFixed(2)},${y.toFixed(2)})" role="button" aria-label="${t('Elimina')}">` +
             `<circle r="${r.toFixed(2)}" stroke-width="${(1.5 * U).toFixed(2)}"/>` +
             `<path d="M${-c},${-c} L${c},${c} M${c},${-c} L${-c},${c}" stroke-width="${(1.8 * U).toFixed(2)}"/></g>`;
     }
@@ -2166,7 +2272,7 @@
         pitchWrap.innerHTML = pitchSVG({ vertical: pitchVertical });
         const rows = benchRows().filter(r => r.name);
         $('benchChips').innerHTML = rows.length
-            ? `<span class="lbl">PANCHINA</span>` + rows.map(r => `<span class="chip"><b>${esc(r.num)}</b>${esc(r.name)}</span>`).join('')
+            ? `<span class="lbl">${t('PANCHINA')}</span>` + rows.map(r => `<span class="chip"><b>${esc(r.num)}</b>${esc(r.name)}</span>`).join('')
             : '';
     }
     let resizeTimer = null;
@@ -2244,7 +2350,7 @@
         $('plNote').value = isNote ? opts.note : '';
         $('plNumWrap').style.display = opts.numLabel ? '' : 'none';
         $('plNumLbl').textContent = opts.numLabel || '';
-        $('plNameLbl').textContent = opts.nameLabel || 'Nome';
+        $('plNameLbl').textContent = opts.nameLabel || t('Nome');
         plNum.setAttribute('inputmode', opts.numeric ? 'numeric' : 'text');
         plNum.value = opts.num || '';
         plName.value = opts.name || '';
@@ -2286,9 +2392,9 @@
     function openPlayerEditor(i) {
         const slot = getSlots()[i];
         openEditor({
-            title: `Giocatore n° ${slot.num}`,
-            numLabel: 'Numero', num: slot.num, numeric: true, linkRows: true,
-            nameLabel: 'Nome', name: slotName(slot),
+            title: t('Giocatore n° {n}', { n: slot.num }),
+            numLabel: t('Numero'), num: slot.num, numeric: true, linkRows: true,
+            nameLabel: t('Nome'), name: slotName(slot),
             onSave: (num, name) => {
                 const slots = getSlots().map(s => ({ ...s }));
                 const sl = slots[i];
@@ -2322,7 +2428,8 @@
     // schemi personalizzati del mister: { id, title, type: 'half' | 'full' }
     const customOf = (kind) => (cur().customSchemes || []).find(c => c.id === kind);
     function spKinds() {
-        return SP_BASE.concat((cur().customSchemes || []).map(c => ({ kind: c.id, title: c.title, custom: c.type })));
+        return SP_BASE.map(k => ({ ...k, title: t(k.title) }))
+            .concat((cur().customSchemes || []).map(c => ({ kind: c.id, title: c.title, custom: c.type })));
     }
     // corner: 'cc' / 'cf' + lato ('dx' = pallone a destra nel disegno).
     // Il lato sinistro è lo specchio del destro.
@@ -2340,12 +2447,12 @@
             // schema personalizzato: solo le pedine della squadra
         } else if (cornerOf(kind) && cornerOf(kind)[1] === 'cc') {
             const mx = (x) => cornerOf(kind)[2] === 'dx' ? x : 68 - x;
-            add('palo', 'P', 'cornerContro.palo', mx(37.5), 1.8, { nameUp: true });
-            add('vertice', 'V', 'cornerContro.vertice', mx(44), 3, { nameSide: true });
+            add('palo', t('P'), 'cornerContro.palo', mx(37.5), 1.8, { nameUp: true });
+            add('vertice', t('V'), 'cornerContro.vertice', mx(44), 3, { nameSide: true });
             // marcatori su due file sfalsate, avversario (quadrato) sotto
             const n = d.cornerContro.marcatori.length;
             d.cornerContro.marcatori.forEach((_, i) => {
-                add('m' + i, 'M', 'cornerContro.marcatori.' + i + '.b', mx(33 + (i - (n - 1) / 2) * 8), i % 2 ? 14 : 10.5,
+                add('m' + i, t('M'), 'cornerContro.marcatori.' + i + '.b', mx(33 + (i - (n - 1) / 2) * 8), i % 2 ? 14 : 10.5,
                     { nameUp: true, opp: 'cornerContro.marcatori.' + i + '.a' });
             });
         } else if (kind === 'pc') {
@@ -2353,24 +2460,24 @@
             // (affiancata, verso la porta), incontro tra barriera e pallone
             const n = d.punCentrale.barriera.length;
             d.punCentrale.barriera.forEach((_, i) => {
-                add('b' + i, (i + 1) + '°', 'punCentrale.barriera.' + i, 34 + (i - (n - 1) / 2) * 2.2, 14.85, { nameUp: true });
+                add('b' + i, ord(i + 1), 'punCentrale.barriera.' + i, 34 + (i - (n - 1) / 2) * 2.2, 14.85, { nameUp: true });
             });
-            add('inc', 'INC', 'punCentrale.inc', 37, 19.5);
+            add('inc', t('INC'), 'punCentrale.inc', 37, 19.5);
         } else if (cornerOf(kind)) {
             // corner a favore: batte il battitore del lato, coperture specchiate
             const dx = cornerOf(kind)[2] === 'dx';
             const mx = (x) => dx ? x : 68 - x;
-            if (dx) add('dx', 'DX', 'cornerFavore.dx', 65, 3.2);
-            else add('sx', 'SX', 'cornerFavore.sx', 3, 3.2);
-            add('c0', '1°', 'cornerFavore.copertura.0', 34, 20);
-            add('c1', '2°', 'cornerFavore.copertura.1', mx(21), 25);
-            add('c2', '3°', 'cornerFavore.copertura.2', mx(47), 25);
+            if (dx) add('dx', t('DX'), 'cornerFavore.dx', 65, 3.2);
+            else add('sx', t('SX'), 'cornerFavore.sx', 3, 3.2);
+            add('c0', ord(1), 'cornerFavore.copertura.0', 34, 20);
+            add('c1', ord(2), 'cornerFavore.copertura.1', mx(21), 25);
+            add('c2', ord(3), 'cornerFavore.copertura.2', mx(47), 25);
         } else {
             // punizione laterale: definita per il lato destro, specchiata per il sinistro
             const key = kind === 'pdx' ? 'punDx' : 'punSx';
             const mx = (x) => kind === 'pdx' ? x : 68 - x;
-            add('p1', '1°', key + '.p1', mx(55.3), 13.8, { nameUp: true });
-            add('p2', '2°', key + '.p2', mx(51.7), 17.4);
+            add('p1', ord(1), key + '.p1', mx(55.3), 13.8, { nameUp: true });
+            add('p2', ord(2), key + '.p2', mx(51.7), 17.4);
             const n = d[key].linea.length;
             d[key].linea.forEach((_, i) => {
                 // il n. 1 è il più vicino alla barriera (lato del pallone)
@@ -2635,7 +2742,7 @@
             const ball = `<circle r="${ballR.toFixed(2)}" fill="#fff" stroke="#111" stroke-width="${lineW.toFixed(3)}"/><circle r="${(ballR / 3).toFixed(2)}" fill="#111"/>`;
             if (!print && ballMovable(kind)) {
                 // area di presa più ampia del pallone, comoda col dito
-                return `<g class="sp-ball" data-kind="${kind}" data-key="ball" aria-label="Pallone" transform="translate(${x.toFixed(2)},${y.toFixed(2)})"><circle r="${V.px(20).toFixed(2)}" fill="transparent" stroke="none"/>${ball}</g>`;
+                return `<g class="sp-ball" data-kind="${kind}" data-key="ball" aria-label="${t('Pallone')}" transform="translate(${x.toFixed(2)},${y.toFixed(2)})"><circle r="${V.px(20).toFixed(2)}" fill="transparent" stroke="none"/>${ball}</g>`;
             }
             return `<g transform="translate(${x.toFixed(2)},${y.toFixed(2)})">${ball}</g>`;
         }).join('');
@@ -2738,7 +2845,7 @@
         if (!list.length && !print) list.push({ n: 0, text: '' });
         return list.map(({ n, text }) => {
             const fs = V.px(print ? 16 : 14), pad = V.px(8), lh = fs * 1.3;
-            const lines = text ? wrapText(text, 34) : ['+ Nota'];
+            const lines = text ? wrapText(text, 34) : [t('+ Nota')];
             const maxLen = Math.max(...lines.map(l => l.length), 6);
             const w = maxLen * fs * 0.56 + pad * 2;
             const h = lines.length * lh - (lh - fs) + pad * 2;
@@ -2762,7 +2869,7 @@
                    <text font-size="${fs.toFixed(2)}" fill="#999" font-weight="700">${tspans}</text>`;
             if (print) return `<g transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}</g>`;
             const del = text ? delBadge(w, 0, V.px(1), `data-del="note" data-kind="${kind}" data-key="${notePosKey(n)}"`) : '';
-            return `<g class="sp-note" data-kind="${kind}" data-key="${notePosKey(n)}" tabindex="0" role="button" aria-label="Nota" transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}${del}</g>`;
+            return `<g class="sp-note" data-kind="${kind}" data-key="${notePosKey(n)}" tabindex="0" role="button" aria-label="${t('Nota')}" transform="translate(${X.toFixed(2)},${Y.toFixed(2)})">${box}${del}</g>`;
         }).join('');
     }
 
@@ -2784,7 +2891,7 @@
         }
         const tk = noteTextKey(kind, n);
         openEditor({
-            title: `Nota · ${spTitle(kind)}`,
+            title: t('Nota · {t}', { t: spTitle(kind) }),
             note: d.spNotes[tk] || '',
             onSave: (num, name, note) => {
                 if (note) d.spNotes[tk] = note;
@@ -2806,18 +2913,18 @@
             const w = Math.max(spGridWidth, minW);
             const head = k.custom
                 ? `<div class="sp-card-head"><div class="block-title">${esc(k.title)}</div>
-                     <span class="sp-type">${k.custom === 'full' ? 'Campo intero' : 'Metà campo'}</span>
-                     <button type="button" class="sp-act" data-act="rename" data-kind="${k.kind}">✏️ Rinomina</button>
-                     <button type="button" class="sp-act" data-act="delete" data-kind="${k.kind}">🗑 Elimina</button></div>`
+                     <span class="sp-type">${k.custom === 'full' ? t('Campo intero') : t('Metà campo')}</span>
+                     <button type="button" class="sp-act" data-act="rename" data-kind="${k.kind}">${t('✏️ Rinomina')}</button>
+                     <button type="button" class="sp-act" data-act="delete" data-kind="${k.kind}">${t('🗑 Elimina')}</button></div>`
                 : `<div class="block-title">${k.title}</div>`;
             const tools = `<div class="sp-tools" data-kind="${k.kind}">
-                <button type="button" class="sp-act" data-act="selmode" data-kind="${k.kind}">☐ Seleziona</button>
-                <button type="button" class="sp-act sel-only" data-act="selall" data-kind="${k.kind}">Tutte</button>
-                <button type="button" class="sp-act sel-only" data-act="selnone" data-kind="${k.kind}">Nessuna</button>
-                <button type="button" class="sp-act" data-act="addnote" data-kind="${k.kind}">📝 Nota</button>
-                <button type="button" class="sp-act" data-arrow="solid" data-area="sp" data-kind="${k.kind}">➝ Freccia</button>
-                <button type="button" class="sp-act" data-arrow="dash" data-area="sp" data-kind="${k.kind}">⇢ Tratteggiata</button>
-                <span class="sel-hint">Tocca le pedine o trascina un riquadro · poi trascinane una o usa le frecce</span>
+                <button type="button" class="sp-act" data-act="selmode" data-kind="${k.kind}">${t('☐ Seleziona')}</button>
+                <button type="button" class="sp-act sel-only" data-act="selall" data-kind="${k.kind}">${t('Tutte')}</button>
+                <button type="button" class="sp-act sel-only" data-act="selnone" data-kind="${k.kind}">${t('Nessuna')}</button>
+                <button type="button" class="sp-act" data-act="addnote" data-kind="${k.kind}">${t('📝 Nota')}</button>
+                <button type="button" class="sp-act" data-arrow="solid" data-area="sp" data-kind="${k.kind}">${t('➝ Freccia')}</button>
+                <button type="button" class="sp-act" data-arrow="dash" data-area="sp" data-kind="${k.kind}">${t('⇢ Tratteggiata')}</button>
+                <span class="sel-hint">${t('Tocca le pedine o trascina un riquadro · poi trascinane una o usa le frecce')}</span>
             </div>`;
             return `<div class="sp-card">${head}${tools}<div class="sp-scroll" data-kind="${k.kind}"><div style="width:${w}px;max-width:100%;min-width:${Math.min(w, minW || w)}px;margin:0 auto">${spSVG(k.kind, false, w)}</div></div></div>`;
         }).join('');
@@ -2864,7 +2971,7 @@
             card.classList.toggle('has-sel', n > 0);
             const b = card.querySelector('[data-act="selmode"]');
             b.classList.toggle('on', mine && spSel.mode);
-            b.textContent = mine && spSel.mode ? `✓ Fine${n ? ' (' + n + ')' : ''}` : (n ? `☑ ${n} selezionate` : '☐ Seleziona');
+            b.textContent = mine && spSel.mode ? t('✓ Fine') + (n ? ' (' + n + ')' : '') : (n ? '☑ ' + t('{n} selezionate', { n }) : t('☐ Seleziona'));
             card.querySelectorAll('.sp').forEach(g => g.classList.toggle('sel', mine && spSel.keys.has(g.dataset.key)));
         });
     }
@@ -2923,7 +3030,7 @@
         const dn = e.target.closest('.del-x[data-del="note"]');
         if (dn) {
             e.preventDefault();
-            if (!confirm('Eliminare questa nota?')) return;
+            if (!confirm(t('Eliminare questa nota?'))) return;
             const key = dn.dataset.key;
             deleteNote(dn.dataset.kind, key === 'note' ? 0 : +key.slice(4));
             save();
@@ -3153,7 +3260,7 @@
         list.push({ a: ctx.fromSvg(p1.x, p1.y), b: ctx.fromSvg(p2.x, p2.y), dash });
         save();
         ctx.rerender();
-        showToast('Trascina la freccia o le sue estremità · toccala per cambiarla');
+        showToast(t('Trascina la freccia o le sue estremità · toccala per cambiarla'));
     }
     document.addEventListener('click', (e) => {
         const b = e.target.closest('[data-arrow]');
@@ -3167,7 +3274,7 @@
         e.preventDefault();
         e.stopPropagation();
         if (e.target.closest('.del-x')) {
-            if (!confirm('Eliminare questa freccia?')) return;
+            if (!confirm(t('Eliminare questa freccia?'))) return;
             const ctx = arrowCtx(g.dataset.area, g.dataset.kind);
             ctx.list().splice(+g.dataset.i, 1);
             save();
@@ -3262,9 +3369,9 @@
         if (!el) return;
         if (el.piece) {
             openEditor({
-                title: `${spTitle(kind)} · Pedina`,
-                numLabel: 'Numero', num: el.label, numeric: true,
-                nameLabel: 'Nome', name: el.name,
+                title: t('{t} · Pedina', { t: spTitle(kind) }),
+                numLabel: t('Numero'), num: el.label, numeric: true,
+                nameLabel: t('Nome'), name: el.name,
                 onSave: (num, name) => {
                     const d = cur();
                     d.spPieces = d.spPieces || {};
@@ -3278,7 +3385,7 @@
         openEditor({
             title: `${spTitle(kind)} · ${el.label}`,
             numLabel: null,
-            nameLabel: el.opp ? 'Marcatore' : 'Nome',
+            nameLabel: el.opp ? t('Marcatore') : t('Nome'),
             name: getPath(cur(), el.path) || '',
             onSave: (num, name) => { setPath(cur(), el.path, name); }
         });
@@ -3288,7 +3395,7 @@
         const d = cur();
         d.customSchemes = d.customSchemes || [];
         const id = 'u' + Date.now().toString(36);
-        d.customSchemes.push({ id, title: 'SCHEMA ' + (d.customSchemes.length + 1), type });
+        d.customSchemes.push({ id, title: t('SCHEMA') + ' ' + (d.customSchemes.length + 1), type });
         save();
         renderSetPieces();
         const card = spGrid.querySelector(`.sp-scroll[data-kind="${id}"]`);
@@ -3299,14 +3406,14 @@
         const c = customOf(id);
         if (!c) return;
         openEditor({
-            title: 'Titolo dello schema',
-            nameLabel: 'Titolo', name: c.title, noList: true,
+            title: t('Titolo dello schema'),
+            nameLabel: t('Titolo'), name: c.title, noList: true,
             onSave: (num, name) => { if (name) c.title = name.toUpperCase(); }
         });
     }
     function deleteCustomScheme(id) {
         const c = customOf(id);
-        if (!c || !confirm(`Eliminare lo schema "${c.title}"?`)) return;
+        if (!c || !confirm(t('Eliminare lo schema "{t}"?', { t: c.title }))) return;
         const d = cur();
         d.customSchemes = d.customSchemes.filter(x => x.id !== id);
         delete d.setPos[id];
@@ -3398,7 +3505,7 @@
             renderSetPieces();
             hamburgerDropdown.classList.remove('open');
             try { localStorage.setItem('clubLogoData', ev.target.result); }
-            catch (_) { alert('Logo troppo grande per il salvataggio automatico. Verrà mantenuto solo per questa sessione.'); }
+            catch (_) { alert(t('Logo troppo grande per il salvataggio automatico. Verrà mantenuto solo per questa sessione.')); }
         };
         reader.readAsDataURL(file);
     });
@@ -3410,14 +3517,14 @@
     try { coachName = (localStorage.getItem(COACH_KEY) || '').trim(); } catch (_) {}
     function updateCoachUI() {
         $('coachNameLbl').textContent = coachName;
-        $('coachBtn').textContent = coachName ? 'Modifica nome' : 'Aggiungi nome allenatore';
+        $('coachBtn').textContent = coachName ? t('Modifica nome') : t('Aggiungi nome allenatore');
     }
     updateCoachUI();
     $('coachBtn').addEventListener('click', () => {
         hamburgerDropdown.classList.remove('open');
         openEditor({
-            title: 'Firma allenatore',
-            nameLabel: 'Nome e cognome', name: coachName, noList: true,
+            title: t('Firma allenatore'),
+            nameLabel: t('Nome e cognome'), name: coachName, noList: true,
             onSave: (num, name) => {
                 coachName = name.replace(/\s+/g, ' ').trim();
                 try { coachName ? localStorage.setItem(COACH_KEY, coachName) : localStorage.removeItem(COACH_KEY); } catch (_) {}
@@ -3453,18 +3560,18 @@
         return `
             <div class="sh-head">
                 ${logo}
-                <div class="sh-title">${title}<small>CALCIO A ${state.mode} · MODULO ${esc(cur().formation)}</small></div>
+                <div class="sh-title">${title}<small>${t('CALCIO A {n} · MODULO {f}', { n: state.mode, f: esc(cur().formation) })}</small></div>
                 <div class="sh-meta">
-                    ${metaItem('Avversario', m.opponent)}
-                    ${metaItem('Data', formatDate(m.date))}
-                    ${metaItem('Gara', m.matchType)}
-                    ${metaItem('Sede', m.venue)}
+                    ${metaItem(t('Avversario'), m.opponent)}
+                    ${metaItem(t('Data'), formatDate(m.date))}
+                    ${metaItem(t('Gara'), m.matchType && t(m.matchType))}
+                    ${metaItem(t('Sede'), m.venue && t(m.venue))}
                 </div>
             </div>`;
     }
 
     function buildSheet() {
-        sheet.innerHTML = sheetHead('POSIZIONAMENTI') + `<div class="sh-board">${buildBoard(false)}</div>`;
+        sheet.innerHTML = sheetHead(t('POSIZIONAMENTI')) + `<div class="sh-board">${buildBoard(false)}</div>`;
 
         // Pagina 2: campo stampabile (solo linee nere) + panchina
         const d = cur();
@@ -3472,18 +3579,18 @@
         if (d.extra.trim() || d.extraNum.trim()) {
             bench += `<tr><td class="n">${esc(d.extraNum)}</td><td><span class="v">${esc(d.extra)}</span></td></tr>`;
         }
-        $('sheet2').innerHTML = sheetHead('SCHIERAMENTO') + `
+        $('sheet2').innerHTML = sheetHead(t('SCHIERAMENTO')) + `
             <div class="sh-pitch">
                 <div class="field-svg">${pitchSVG({ vertical: false, print: true })}</div>
                 <aside>
-                    <div class="block-title">PANCHINA</div>
+                    <div class="block-title">${t('PANCHINA')}</div>
                     <table class="grid"><colgroup><col class="c-n"><col></colgroup>${bench}</table>
                 </aside>
             </div>`;
 
         // Pagine 3-9: palle inattive, uno schema per pagina (solo linee nere)
         SP_BASE.forEach((k, i) => {
-            $('sheet' + (i + 3)).innerHTML = sheetHead(k.title) +
+            $('sheet' + (i + 3)).innerHTML = sheetHead(t(k.title)) +
                 `<div class="sh-sp">${spSVG(k.kind, true)}</div>`;
         });
         // poi una pagina per ogni schema personalizzato
@@ -3492,7 +3599,7 @@
         // firma dell'allenatore in fondo a ogni pagina
         if (coachName) {
             scaler.querySelectorAll('.sheet').forEach(sh => {
-                sh.insertAdjacentHTML('beforeend', `<div class="sh-sign">Allenatore: ${esc(coachName)}</div>`);
+                sh.insertAdjacentHTML('beforeend', `<div class="sh-sign">${t('Allenatore: {n}', { n: esc(coachName) })}</div>`);
             });
         }
     }
@@ -3529,7 +3636,7 @@
     // che non servono. Si riparte da tutte a ogni apertura dell'anteprima.
     let skipPages = new Set();
     function pageNames() {
-        return ['Scheda', 'Schieramento'].concat(spKinds().map(k => k.custom ? k.title
+        return [t('Scheda'), t('Schieramento')].concat(spKinds().map(k => k.custom ? k.title
             : (k.title.charAt(0) + k.title.slice(1).toLowerCase()).replace(/ (dx|sx)$/, m => m.toUpperCase())));
     }
     function renderPagePick() {
@@ -3537,12 +3644,12 @@
         frames.forEach((f, i) => f.classList.toggle('excluded', skipPages.has(i)));
         const names = pageNames();
         const all = skipPages.size === 0;
-        $('pagePick').innerHTML = `<span>Pagine da salvare:</span>` + frames.map((f, i) =>
-            `<label class="${skipPages.has(i) ? 'off' : ''}"><input type="checkbox" data-page="${i}" ${skipPages.has(i) ? '' : 'checked'}/>${i + 1} · ${esc(names[i] || 'Pagina')}</label>`).join('') +
-            `<button type="button" id="pagesAllBtn">${all ? 'Nessuna' : 'Tutte'}</button>`;
+        $('pagePick').innerHTML = `<span>${t('Pagine da salvare:')}</span>` + frames.map((f, i) =>
+            `<label class="${skipPages.has(i) ? 'off' : ''}"><input type="checkbox" data-page="${i}" ${skipPages.has(i) ? '' : 'checked'}/>${i + 1} · ${esc(names[i] || t('Pagina'))}</label>`).join('') +
+            `<button type="button" id="pagesAllBtn">${all ? t('Nessuna') : t('Tutte')}</button>`;
         const n = frames.length - skipPages.size;
         $('savePdfBtn').querySelector('.btn-text').textContent =
-            all ? '✓ Conferma e salva' : `✓ Salva ${n} ${n === 1 ? 'pagina' : 'pagine'}`;
+            all ? t('✓ Conferma e salva') : (n === 1 ? t('✓ Salva 1 pagina') : t('✓ Salva {n} pagine', { n }));
         $('savePdfBtn').disabled = n === 0;
     }
     $('pagePick').addEventListener('change', (e) => {
@@ -3575,7 +3682,7 @@
 
     function pdfFilename() {
         const opp = (state.meta.opponent || 'gara').trim().replace(/[^\w\-àèéìòù ]+/gi, '').replace(/\s+/g, '-');
-        return `posizionamenti_calcio${state.mode}_${opp}_${state.meta.date || new Date().toISOString().slice(0, 10)}.pdf`;
+        return `${lang === 'en' ? 'positioning_' + state.mode + 'aside' : 'posizionamenti_calcio' + state.mode}_${opp}_${state.meta.date || new Date().toISOString().slice(0, 10)}.pdf`;
     }
 
     // I fogli vengono catturati a dimensione reale: la scala dell'anteprima
@@ -3583,7 +3690,7 @@
     // clona solo il foglio) lo rende sempre a 1122×790 px = A4 orizzontale.
     function savePdf(btn) {
         if (typeof html2pdf === 'undefined') {
-            alert('Libreria PDF non caricata. Riapri la pagina e riprova.');
+            alert(t('Libreria PDF non caricata. Riapri la pagina e riprova.'));
             return Promise.resolve();
         }
         buildSheet();
@@ -3603,7 +3710,7 @@
         if (!sheets.length) {
             btn.classList.remove('loading');
             btn.disabled = false;
-            alert('Scegli almeno una pagina da salvare.');
+            alert(t('Scegli almeno una pagina da salvare.'));
             return Promise.resolve();
         }
         let worker = html2pdf().set(opt).from(sheets[0]).toPdf();
@@ -3613,7 +3720,7 @@
         });
         return worker.save()
             .then(closePreview)
-            .catch(err => { console.error('PDF error:', err); alert('Errore durante la generazione del PDF. Riprova.'); })
+            .catch(err => { console.error('PDF error:', err); alert(t('Errore durante la generazione del PDF. Riprova.')); })
             .then(() => { btn.classList.remove('loading'); btn.disabled = false; });
     }
 
@@ -3629,7 +3736,48 @@
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); openPreview(); }
     });
 
+    // ---- LINGUA: TESTI FISSI DELLA PAGINA ----
+    // Si ricorda il testo italiano di ogni nodo/attributo e lo si traduce.
+    // Le parti disegnate dal codice (tabelle, campo, schemi…) usano t().
+    const I18N_SKIP = '#board,#spGrid,#pitchWrap,#previewScaler,#benchChips,#rosterRows,#pagePick,#toast,#coachNameLbl,#coachBtn,' +
+        '#rosterInfo,#statusLabel,#rosterConfirmText,#rosterTitle,#plTitle,#plNumLbl,#plNameLbl,#zoomFitBtn,#savePdfBtn,#formation,datalist,script,style,#langBtn';
+    const i18nText = [], i18nAttr = [];
+    (function collectStatic() {
+        const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let n;
+        while ((n = w.nextNode())) {
+            const key = n.nodeValue.replace(/\s+/g, ' ').trim();
+            if (!key || n.parentElement.closest(I18N_SKIP) || !Object.prototype.hasOwnProperty.call(EN, key)) continue;
+            i18nText.push({ n, orig: n.nodeValue, key });
+        }
+        document.querySelectorAll('[placeholder],[aria-label],[title],img[alt]').forEach(el => {
+            if (el.closest(I18N_SKIP)) return;
+            ['placeholder', 'aria-label', 'title', 'alt'].forEach(a => {
+                const v = el.getAttribute(a);
+                if (v && Object.prototype.hasOwnProperty.call(EN, v)) i18nAttr.push({ el, a, orig: v });
+            });
+        });
+    })();
+    function applyLang() {
+        document.documentElement.lang = lang;
+        document.title = t('Posizionamenti');
+        i18nText.forEach(({ n, orig, key }) => {
+            const lead = orig.match(/^\s*/)[0], trail = orig.match(/\s*$/)[0];
+            n.nodeValue = lang === 'en' ? lead + t(key) + trail : orig;
+        });
+        i18nAttr.forEach(({ el, a, orig }) => el.setAttribute(a, t(orig)));
+        $('langBtn').textContent = lang === 'en' ? '🌐 Italiano' : '🌐 English';
+        updateCoachUI();
+    }
+    $('langBtn').addEventListener('click', () => {
+        lang = lang === 'en' ? 'it' : 'en';
+        try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+        applyLang();
+        render();
+    });
+
     // ---- INIT ----
+    applyLang();
     render();
 })();
 </script>
