@@ -2668,10 +2668,13 @@
                 </g>`;
             }
             const isSel = spSel.kind === kind && spSel.keys.has(el.key);
-            return `<g class="sp${el.piece ? ' piece' : ''}${isSel ? ' sel' : ''}" data-kind="${kind}" data-key="${el.key}" tabindex="0" role="button" aria-label="${esc(el.label)} ${esc(name)}" transform="${pos}">
+            // pedina in più ancora senza numero né nome: vuota; appena il
+            // mister le dà un numero o un nome diventa piena come le altre
+            const blank = el.piece && !String(el.label || '').trim() && !String(el.name || '').trim();
+            return `<g class="sp${blank ? ' piece' : ''}${isSel ? ' sel' : ''}" data-kind="${kind}" data-key="${el.key}" tabindex="0" role="button" aria-label="${esc(el.label)} ${esc(name)}" transform="${pos}">
                 <g transform="scale(${V.kc})">
                     <circle class="halo" r="2.75" style="stroke-width:${(V.px(2.5) / V.kc).toFixed(3)}"/>
-                    <circle r="${el.piece ? (1.9 - V.px(2) / V.kc).toFixed(3) : 1.9}" style="stroke-width:${(V.px(2) / V.kc).toFixed(3)}"/>
+                    <circle r="${blank ? (1.9 - V.px(2) / V.kc).toFixed(3) : 1.9}" style="stroke-width:${(V.px(2) / V.kc).toFixed(3)}"/>
                     <text class="lb" y="${lbY}" text-anchor="middle" font-size="${lbSize}">${esc(el.label)}</text>
                 </g>
                 <text class="name" ${nameAttrs} style="stroke-width:${V.px(3).toFixed(3)}">${esc(name)}</text>
