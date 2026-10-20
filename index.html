@@ -445,10 +445,10 @@
         .sh-meta div span { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--accent); letter-spacing: 0.4px; }
         .sh-meta div b { font-size: 13px; }
         .sh-board { flex: 1; display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 40px; min-height: 0; }
-        .sh-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+        .sh-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
         .sheet .block-title { font-size: 13px; margin-bottom: 5px; color: #111; }
         .sheet table.grid { font-size: 14px; table-layout: fixed; }
-        .sheet table.grid td { border-color: #555; height: 23px; padding: 0 8px; }
+        .sheet table.grid td { border-color: #555; height: 22px; padding: 0 8px; }
         .sheet table.grid td.n, .sheet table.grid td.lbl { padding: 0 4px; }
         .sheet table.grid col.c-n { width: 40px; }
         .sheet table.grid col.c-lbl { width: 36%; }
@@ -1075,7 +1075,7 @@
         // schemi
         'CALCI D’ANGOLO CONTRO DA DX': 'CORNERS AGAINST FROM RIGHT', 'CALCI D’ANGOLO CONTRO DA SX': 'CORNERS AGAINST FROM LEFT',
         'CALCI D’ANGOLO A FAVORE DA DX': 'CORNERS FOR FROM RIGHT', 'CALCI D’ANGOLO A FAVORE DA SX': 'CORNERS FOR FROM LEFT',
-        'P': 'P', 'V': 'B', 'M': 'M', 'INC': 'PR',
+        'P': 'P', 'V': 'B', 'P2': 'P2', '2° PALO': '2ND POST', 'M': 'M', 'INC': 'PR',
         '☐ Seleziona': '☐ Select', 'Tutte': 'All', 'Nessuna': 'None', '📝 Nota': '📝 Note',
         'Tocca le pedine o trascina un riquadro · poi trascinane una o usa le frecce': 'Tap pieces or drag a box · then drag one or use the arrow keys',
         '✓ Fine': '✓ Done', '{n} selezionate': '{n} selected', '+ Nota': '+ Note', '✏️ Rinomina': '✏️ Rename',
@@ -1203,7 +1203,7 @@
             benchNums: Array.from({ length: c.bench }, (_, i) => String(c.starters + i + 1)),
             extraNum: '',
             extra: '',
-            cornerContro: { palo: '', vertice: '', marcatori: Array.from({ length: c.marcatori }, () => ({ a: '', b: '' })) },
+            cornerContro: { palo: '', vertice: '', palo2: '', marcatori: Array.from({ length: c.marcatori }, () => ({ a: '', b: '' })) },
             cornerFavore: { dx: '', sx: '', copertura: arr(3) },
             punDx: { p1: '', p2: '', linea: arr(c.linea) },
             punSx: { p1: '', p2: '', linea: arr(c.linea) },
@@ -1383,6 +1383,7 @@
         // CALCI D'ANGOLO CONTRO
         let cc = `<tr><td class="lbl">${t('PALO')}</td><td>${val('cornerContro.palo')}</td></tr>
                   <tr><td class="lbl">${t('VERTICE')}</td><td>${val('cornerContro.vertice')}</td></tr>
+                  <tr><td class="lbl">${t('2° PALO')}</td><td>${val('cornerContro.palo2')}</td></tr>
                   <tr><td class="sub" colspan="2">${t('MARCATORI')}</td></tr>`;
         d.cornerContro.marcatori.forEach((_, i) => {
             cc += `<tr><td class="lbl">${plain('cornerContro.marcatori.' + i + '.a', editable ? t('Avversario') : '')}</td><td>${val('cornerContro.marcatori.' + i + '.b', editable ? t('Marcatore') : '')}</td></tr>`;
@@ -2519,6 +2520,8 @@
             const mx = (x) => cornerOf(kind)[2] === 'dx' ? x : 68 - x;
             add('palo', t('P'), 'cornerContro.palo', mx(37.5), 1.8, { nameUp: true });
             add('vertice', t('V'), 'cornerContro.vertice', mx(44), 3, { nameSide: true });
+            // 2° palo: sul palo lontano dal pallone
+            add('palo2', t('P2'), 'cornerContro.palo2', mx(30.5), 1.8, { nameUp: true });
             // marcatori su due file sfalsate, avversario (quadrato) sotto
             const n = d.cornerContro.marcatori.length;
             d.cornerContro.marcatori.forEach((_, i) => {
