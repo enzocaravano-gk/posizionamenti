@@ -934,6 +934,7 @@
             <button type="button" class="btn btn-outline" data-set="solid">➝ Continua</button>
             <button type="button" class="btn btn-outline" data-set="dash">⇢ Tratteggiata</button>
             <button type="button" class="btn btn-outline" data-set="flip">⇄ Inverti verso</button>
+            <button type="button" class="btn btn-outline" data-set="straight">⟋ Raddrizza</button>
             <button type="button" class="btn btn-outline" data-set="del">🗑 Elimina</button>
         </div>
         <div class="row-btns">
@@ -1057,7 +1058,7 @@
         '📄 Salva PDF': '📄 Save PDF', '➕ Nuovo schema': '➕ New diagram', '🧹 Pulisci posizionamenti': '🧹 Clear positioning', '⟲ Reset completo': '⟲ Full reset',
         'Anteprima · A4 orizzontale': 'Preview · A4 landscape', 'Riduci': 'Zoom out', 'Adatta': 'Fit', 'Ingrandisci': 'Zoom in',
         '✕ Chiudi': '✕ Close', '✓ Conferma e salva': '✓ Confirm and save',
-        'Freccia': 'Arrow', '➝ Continua': '➝ Solid', '⇄ Inverti verso': '⇄ Reverse', '🗑 Elimina': '🗑 Delete', 'Fatto': 'Done',
+        'Freccia': 'Arrow', '➝ Continua': '➝ Solid', '⇄ Inverti verso': '⇄ Reverse', '⟋ Raddrizza': '⟋ Straighten', '🗑 Elimina': '🗑 Delete', 'Fatto': 'Done',
         'Nuovo schema · scegli il campo': 'New diagram · choose the pitch', 'Metà campo': 'Half pitch', 'Campo intero': 'Full pitch', 'Annulla': 'Cancel',
         "I giocatori del roster compaiono nell'elenco quando compili le tabelle e, scegliendo un nome nella Formazione, il numero di maglia si mette da solo. Il roster resta salvato su questo dispositivo: esportalo per averne una copia o per passarlo ai collaboratori.":
             'Roster players appear in the list when you fill in the tables, and picking a name in the Line-up fills in the shirt number automatically. The roster is saved on this device: export it to keep a copy or share it with your staff.',
@@ -1106,7 +1107,7 @@
         'Cancellare tutti i posizionamenti del calcio a {m}?': 'Clear all the {m}-a-side positioning?',
         'Resettare completamente la scheda (calcio a 11 e a 9)?': 'Fully reset the sheet (11-a-side and 9-a-side)?',
         'Eliminare questa nota?': 'Delete this note?', 'Eliminare questa freccia?': 'Delete this arrow?', 'Eliminare lo schema "{t}"?': 'Delete the diagram "{t}"?',
-        'Trascina la freccia o le sue estremità · toccala per cambiarla': 'Drag the arrow or its ends · tap it to change it',
+        'Trascina la freccia o le sue estremità · il rombo al centro la curva · toccala per cambiarla': 'Drag the arrow or its ends · the diamond in the middle bends it · tap it to change it',
         'Logo troppo grande per il salvataggio automatico. Verrà mantenuto solo per questa sessione.': 'Logo too large to be saved automatically. It will be kept for this session only.',
         'Firma allenatore': 'Coach signature', 'Nome e cognome': 'First and last name',
         'Libreria PDF non caricata. Riapri la pagina e riprova.': 'PDF library not loaded. Reopen the page and try again.',
@@ -2218,22 +2219,51 @@
     // in coordinate dell'SVG; U = unità SVG per pixel (spessori e punta in
     // px fissi, come i pallini). Nell'app: linea larga invisibile per la
     // presa e due maniglie alle estremità.
+    // a = { x1, y1, x2, y2, cx?, cy?, dash } in coordinate SVG. Con cx/cy la
+    // freccia è una curva (Bézier quadratica) e la maniglia centrale la piega.
     function arrowMarkup(a, U, print) {
-        const len = Math.hypot(a.x2 - a.x1, a.y2 - a.y1) || 0.001;
-        const ux = (a.x2 - a.x1) / len, uy = (a.y2 - a.y1) / len;
-        const hl = Math.min(13 * U, len * 0.6), hw = 5.5 * U;
-        const bx = a.x2 - ux * hl, by = a.y2 - uy * hl;
         const f = (v) => v.toFixed(2);
+        const curved = a.cx != null;
+        const P0 = [a.x1, a.y1], P2 = [a.x2, a.y2];
+        const C = curved ? [a.cx, a.cy] : [(a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2];
+        const at = (t) => [(1 - t) * (1 - t) * P0[0] + 2 * (1 - t) * t * C[0] + t * t * P2[0],
+                           (1 - t) * (1 - t) * P0[1] + 2 * (1 - t) * t * C[1] + t * t * P2[1]];
+        // lunghezza approssimata della curva
+        let len = 0, prev = P0;
+        for (let k = 1; k <= 16; k++) { const q = at(k / 16); len += Math.hypot(q[0] - prev[0], q[1] - prev[1]); prev = q; }
+        len = len || 0.001;
+        const hl = Math.min(13 * U, len * 0.6), hw = 5.5 * U;
+        // direzione della punta = tangente alla fine della curva
+        let tx = P2[0] - C[0], ty = P2[1] - C[1];
+        if (Math.hypot(tx, ty) < 1e-6) { tx = P2[0] - P0[0]; ty = P2[1] - P0[1]; }
+        const tl = Math.hypot(tx, ty) || 0.001, ux = tx / tl, uy = ty / tl;
+        const bx = a.x2 - ux * hl, by = a.y2 - uy * hl;
+        // la linea si ferma alla base della punta (curva tagliata a t1)
+        const t1 = Math.max(0, 1 - hl / len);
+        const c1 = [P0[0] + (C[0] - P0[0]) * t1, P0[1] + (C[1] - P0[1]) * t1], e1 = at(t1);
+        const lineD = curved ? `M${f(P0[0])},${f(P0[1])} Q${f(c1[0])},${f(c1[1])} ${f(e1[0])},${f(e1[1])}`
+                             : `M${f(P0[0])},${f(P0[1])} L${f(bx)},${f(by)}`;
         const sw = (print ? 2.2 : 2.6) * U;
         const dash = a.dash ? ` stroke-dasharray="${f(7 * U)} ${f(5 * U)}"` : '';
-        const line = `<line class="arw-line" x1="${f(a.x1)}" y1="${f(a.y1)}" x2="${f(bx)}" y2="${f(by)}" stroke="#111" stroke-width="${f(sw)}"${dash} stroke-linecap="${a.dash ? 'butt' : 'round'}"/>`;
+        const line = `<path class="arw-line" d="${lineD}" fill="none" stroke="#111" stroke-width="${f(sw)}"${dash} stroke-linecap="${a.dash ? 'butt' : 'round'}"/>`;
         const head = `<path class="arw-head" d="M${f(a.x2)},${f(a.y2)} L${f(bx - uy * hw)},${f(by + ux * hw)} L${f(bx + uy * hw)},${f(by - ux * hw)} Z" fill="#111"/>`;
         if (print) return line + head;
-        return `<line class="arw-hit" x1="${f(a.x1)}" y1="${f(a.y1)}" x2="${f(a.x2)}" y2="${f(a.y2)}" stroke-width="${f(22 * U)}"/>` + line + head +
+        const fullD = curved ? `M${f(P0[0])},${f(P0[1])} Q${f(C[0])},${f(C[1])} ${f(P2[0])},${f(P2[1])}` : `M${f(P0[0])},${f(P0[1])} L${f(P2[0])},${f(P2[1])}`;
+        // maniglia centrale sul punto di mezzo della curva; ✕ di lato, dalla parte
+        // opposta alla pancia (o perpendicolare se la freccia è dritta)
+        const M = at(0.5);
+        const chordX = (a.x1 + a.x2) / 2, chordY = (a.y1 + a.y2) / 2;
+        let nx = chordX - M[0], ny = chordY - M[1];
+        if (Math.hypot(nx, ny) < 4 * U) {
+            const cl = Math.hypot(a.x2 - a.x1, a.y2 - a.y1) || 1;
+            nx = -(a.y2 - a.y1) / cl; ny = (a.x2 - a.x1) / cl;
+        }
+        const nl = Math.hypot(nx, ny) || 1;
+        return `<path class="arw-hit" d="${fullD}" fill="none" stroke-width="${f(22 * U)}"/>` + line + head +
             `<circle class="arw-h" data-end="a" cx="${f(a.x1)}" cy="${f(a.y1)}" r="${f(6 * U)}" stroke-width="${f(2 * U)}"/>` +
             `<circle class="arw-h" data-end="b" cx="${f(a.x2)}" cy="${f(a.y2)}" r="${f(6 * U)}" stroke-width="${f(2 * U)}" fill-opacity="0.6"/>` +
-            // ✕ accanto al centro della freccia, di lato
-            delBadge((a.x1 + a.x2) / 2 - uy * 15 * U, (a.y1 + a.y2) / 2 + ux * 15 * U, U, 'data-del="arrow"');
+            `<rect class="arw-h arw-m" data-end="m" x="${f(M[0] - 5.5 * U)}" y="${f(M[1] - 5.5 * U)}" width="${f(11 * U)}" height="${f(11 * U)}" rx="${f(2 * U)}" stroke-width="${f(2 * U)}" transform="rotate(45 ${f(M[0])} ${f(M[1])})"/>` +
+            delBadge(M[0] + nx / nl * 19 * U, M[1] + ny / nl * 19 * U, U, 'data-del="arrow"');
     }
     // Logo della società piccolo nell'angolo in alto a destra dei campi
     // (app e PDF). B = viewBox, U = unità SVG per pixel, size in px.
@@ -2307,8 +2337,8 @@
         const logoL = logoPlace(PB, U, print ? 40 : 30,
             getSlots().map(sl => { const q = toXY(sl, vertical); return { x: q.x, y: q.y, r: 3 }; }));
         const arrows = arrowsSVG((cur().pitchArrows[cur().formation] || []).map((a, i) => {
-            const p1 = toXY(a.a, vertical), p2 = toXY(a.b, vertical);
-            return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, dash: a.dash, i };
+            const p1 = toXY(a.a, vertical), p2 = toXY(a.b, vertical), pc = a.c ? toXY(a.c, vertical) : null;
+            return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, cx: pc ? pc.x : null, cy: pc ? pc.y : null, dash: a.dash, i };
         }), U, print, 'pitch');
         const svgStr = `<svg class="pitch-svg"${size} viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
             <g fill="none" stroke="#111" stroke-width="0.3"${linesTransform}>${pitchLines()}</g>
@@ -2874,7 +2904,8 @@
                 ${arrowsSVG(((d.spArrows || {})[kind] || []).map((a, i) => {
                     const [x1, y1] = V.T(V.mx.fwd(a.a.x), V.my.fwd(a.a.y));
                     const [x2, y2] = V.T(V.mx.fwd(a.b.x), V.my.fwd(a.b.y));
-                    return { x1, y1, x2, y2, dash: a.dash, i };
+                    const [cx, cy] = a.c ? V.T(V.mx.fwd(a.c.x), V.my.fwd(a.c.y)) : [null, null];
+                    return { x1, y1, x2, y2, cx, cy, dash: a.dash, i };
                 }), V.px(1), print, 'sp', kind)}
                 ${balls}${els}${spNoteSVG(kind, V, print)}
             </g>
@@ -3333,7 +3364,7 @@
         list.push({ a: ctx.fromSvg(p1.x, p1.y), b: ctx.fromSvg(p2.x, p2.y), dash });
         save();
         ctx.rerender();
-        showToast(t('Trascina la freccia o le sue estremità · toccala per cambiarla'));
+        showToast(t('Trascina la freccia o le sue estremità · il rombo al centro la curva · toccala per cambiarla'));
     }
     document.addEventListener('click', (e) => {
         const b = e.target.closest('[data-arrow]');
@@ -3363,7 +3394,7 @@
         const pt = svgPoint(svg, e);
         const h = e.target.closest('.arw-h');
         arwDrag = { g, svg, ctx, i, area, kind, end: h ? h.dataset.end : null, pointerId: e.pointerId,
-                    cx0: e.clientX, cy0: e.clientY, p0: [pt.x, pt.y], A: ctx.toSvg(a.a), B: ctx.toSvg(a.b), moved: false,
+                    cx0: e.clientX, cy0: e.clientY, p0: [pt.x, pt.y], A: ctx.toSvg(a.a), B: ctx.toSvg(a.b), C: a.c ? ctx.toSvg(a.c) : null, moved: false,
                     U: (svg.viewBox.baseVal.width || 100) / (svg.getBoundingClientRect().width || 1) };
     }
     function onArrowMove(e) {
@@ -3374,15 +3405,23 @@
         d.g.classList.add('dragging');
         const pt = svgPoint(d.svg, e);
         const dx = pt.x - d.p0[0], dy = pt.y - d.p0[1];
-        let A = d.A, B = d.B;
+        let A = d.A, B = d.B, C = d.C;
         if (d.end === 'a') A = [pt.x, pt.y];
         else if (d.end === 'b') B = [pt.x, pt.y];
-        else { A = [d.A[0] + dx, d.A[1] + dy]; B = [d.B[0] + dx, d.B[1] + dy]; }
+        else if (d.end === 'm') {
+            // la curva passa sotto il dito: punto di mezzo = (A + 2C + B) / 4
+            C = [2 * pt.x - (A[0] + B[0]) / 2, 2 * pt.y - (A[1] + B[1]) / 2];
+        } else {
+            A = [d.A[0] + dx, d.A[1] + dy]; B = [d.B[0] + dx, d.B[1] + dy];
+            if (C) C = [C[0] + dx, C[1] + dy];
+        }
         // si salva nei dati (che tengono la freccia dentro il campo) e si ridisegna solo lei
         d.na = d.ctx.fromSvg(A[0], A[1]);
         d.nb = d.ctx.fromSvg(B[0], B[1]);
+        d.nc = C ? d.ctx.fromSvg(C[0], C[1]) : null;
         const [x1, y1] = d.ctx.toSvg(d.na), [x2, y2] = d.ctx.toSvg(d.nb);
-        d.g.innerHTML = arrowMarkup({ x1, y1, x2, y2, dash: d.ctx.list()[d.i].dash }, d.U, false);
+        const [cx, cy] = d.nc ? d.ctx.toSvg(d.nc) : [null, null];
+        d.g.innerHTML = arrowMarkup({ x1, y1, x2, y2, cx, cy, dash: d.ctx.list()[d.i].dash }, d.U, false);
     }
     function onArrowUp(e) {
         const d = arwDrag;
@@ -3391,6 +3430,7 @@
         if (d.moved && d.na) {
             const a = d.ctx.list()[d.i];
             a.a = d.na; a.b = d.nb;
+            if (d.nc) a.c = d.nc; else delete a.c;
             save();
             d.ctx.rerender();
         } else if (e.type === 'pointerup') {
@@ -3430,10 +3470,11 @@
         const act = b.dataset.set;
         if (act === 'del') list.splice(arwEdit.i, 1);
         else if (act === 'flip') [a.a, a.b] = [a.b, a.a];
+        else if (act === 'straight') delete a.c;
         else a.dash = act === 'dash';
         save();
         ctx.rerender();
-        if (act === 'del' || act === 'flip') closeArrowEditor();
+        if (act === 'del' || act === 'flip' || act === 'straight') closeArrowEditor();
         else openArrowEditor(arwEdit.area, arwEdit.kind, arwEdit.i);
     });
 
