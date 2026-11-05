@@ -459,6 +459,15 @@
         .sh-col.fill > div { flex: 1; display: flex; flex-direction: column; min-height: 0; }
         .sh-col.fill table.grid { flex: 1; height: 100%; font-size: 16px; }
         .sh-col.fill table.grid td.sub { font-size: 13px; }
+        /* calci di rigore: poche righe, non si allungano come le altre */
+        .sh-col.fill > div.pen { flex: none; }
+        .sh-col.fill > div.pen table.grid { flex: none; height: auto; }
+        /* pagina delle tabelle personalizzate */
+        .sh-tables { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; min-height: 0; align-items: start; }
+        .sh-tables .sh-col { gap: 16px; }
+        .sh-tables .block-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+        .sheet .sh-tables table.grid { font-size: 15px; }
+        .sheet .sh-tables table.grid td { height: 28px; }
         .sheet .note-box { flex: 1; display: flex; flex-direction: column; min-height: 0; }
         .sheet .note-text {
             flex: 1;
@@ -471,6 +480,26 @@
             word-break: break-word;
             overflow: hidden;
         }
+
+        /* ---- TABELLE PERSONALIZZATE ---- */
+        .ct-area { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+        .ct-grid { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 22px 28px; align-items: start; }
+        .ct-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+        .ct-title {
+            flex: 1; min-width: 0; text-align: center; font: inherit; font-size: 14px; font-weight: 800; letter-spacing: 0.4px;
+            color: var(--accent); text-transform: uppercase; background: transparent;
+            border: 1px dashed rgba(var(--accent-rgb), 0.4); border-radius: 4px; padding: 5px 8px;
+        }
+        .ct-title:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; background: #fff; }
+        .ct-del { flex: none; width: 36px; height: 34px; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer; font-size: 15px; }
+        .ct-del:hover { background: #fdf6f6; border-color: var(--accent); }
+        .ct-rows { display: flex; gap: 8px; margin-top: 8px; }
+        .ct-rows button {
+            flex: 1; min-height: 36px; font: inherit; font-size: 14px; font-weight: 700; color: var(--accent);
+            background: #fff; border: 1px solid rgba(var(--accent-rgb), 0.45); border-radius: 4px; cursor: pointer;
+        }
+        .ct-rows button:hover:not(:disabled) { background: #fdf6f6; }
+        .ct-rows button:disabled { opacity: 0.4; cursor: default; }
 
         /* ---- CAMPO (schieramento) ---- */
         .pitch-section { margin-top: 34px; }
@@ -1072,6 +1101,10 @@
         'CALCI D’ANGOLO A FAVORE': 'CORNERS FOR', 'BATTITORE': 'TAKER', 'DX': 'R', 'SX': 'L', 'COPERTURA': 'COVER',
         'PUNIZIONE CENTRALE': 'CENTRAL FREE KICK', 'INC.': 'PRESS',
         'PUNIZIONI LATERALI DX': 'WIDE FREE KICKS RIGHT', 'PUNIZIONI LATERALI SX': 'WIDE FREE KICKS LEFT', 'LINEA DIFENSIVA': 'DEFENSIVE LINE',
+        'CALCI DI RIGORE': 'PENALTIES', 'BATTITORI': 'TAKERS', '➕ Aggiungi tabella': '➕ Add table', 'Nuova tabella': 'New table', 'TABELLA': 'TABLE',
+        'Titolo della tabella': 'Table title', 'Elimina tabella': 'Delete table', '＋ Riga': '＋ Row', '− Riga': '− Row',
+        'Eliminare la tabella "{t}"?': 'Delete table "{t}"?', 'L’ultima riga contiene del testo. Eliminarla?': 'The last row contains text. Delete it?',
+        'TABELLE PERSONALIZZATE': 'CUSTOM TABLES', 'Tabelle personalizzate': 'Custom tables',
         'NOTE': 'NOTES', 'Indicazioni, consegne, palle inattive particolari…': 'Instructions, tasks, special set pieces…',
         // schemi
         'CALCI D’ANGOLO CONTRO DA DX': 'CORNERS AGAINST FROM RIGHT', 'CALCI D’ANGOLO CONTRO DA SX': 'CORNERS AGAINST FROM LEFT',
@@ -1210,6 +1243,10 @@
             punSx: { p1: '', p2: '', linea: arr(c.linea) },
             // punizione centrale: barriera 1°-5° e uomo all'incontro (INC.)
             punCentrale: { barriera: arr(5), inc: '' },
+            // calci di rigore: i battitori in ordine
+            rigori: { battitori: arr(3) },
+            // tabelle create dal mister: [{ id, title, rows: [{ a, b }] }]
+            customTables: [],
             note: '',
             // posizioni personalizzate sul campo, per modulo:
             // { '4-4-2': [{ num, lx, dy, name }] }
@@ -1307,6 +1344,13 @@
                 if (sd && sd.spPieces && typeof sd.spPieces === 'object') state.data[m].spPieces = sd.spPieces;
                 if (sd && sd.spArrows && typeof sd.spArrows === 'object') state.data[m].spArrows = sd.spArrows;
                 if (sd && sd.pitchArrows && typeof sd.pitchArrows === 'object') state.data[m].pitchArrows = sd.pitchArrows;
+                if (sd && Array.isArray(sd.customTables)) {
+                    state.data[m].customTables = sd.customTables.filter(c => c && typeof c.id === 'string' && Array.isArray(c.rows)).map(c => ({
+                        id: c.id,
+                        title: String(c.title || ''),
+                        rows: c.rows.map(r => ({ a: String((r && r.a) || ''), b: String((r && r.b) || '') }))
+                    }));
+                }
                 if (sd && Array.isArray(sd.customFormations)) state.data[m].customFormations = sd.customFormations.filter(f => typeof f === 'string');
                 if (sd && sd.spNotes && typeof sd.spNotes === 'object') {
                     Object.keys(sd.spNotes).forEach(k => {
@@ -1417,6 +1461,12 @@
             return h;
         };
 
+        // CALCI DI RIGORE
+        let rig = `<tr><td class="sub" colspan="2">${t('BATTITORI')}</td></tr>`;
+        d.rigori.battitori.forEach((_, i) => {
+            rig += `<tr><td class="n">${ord(i + 1)}</td><td>${val('rigori.battitori.' + i)}</td></tr>`;
+        });
+
         const note = editable
             ? `<textarea data-path="note" placeholder="${t('Indicazioni, consegne, palle inattive particolari…')}">${esc(d.note)}</textarea>`
             : `<div class="note-text">${esc(d.note)}</div>`;
@@ -1436,7 +1486,55 @@
             <div class="${fillCls}">
                 <div>${title(t('PUNIZIONI LATERALI DX'))}${tbl('n', pun('punDx'))}</div>
                 <div>${title(t('PUNIZIONI LATERALI SX'))}${tbl('n', pun('punSx'))}</div>
+                <div class="pen">${title(t('CALCI DI RIGORE'))}${tbl('n', rig)}</div>
+            </div>${editable ? customTablesEditor(val, plain) : ''}`;
+    }
+
+    // ---- TABELLE PERSONALIZZATE ----
+    // Si scrivono sotto le tabelle fisse: le celle sono normali celle del
+    // tabellone, quindi valgono frecce, selezione e copia/incolla.
+    const CT_MAX_ROWS = 20;
+    function customTablesEditor(val, plain) {
+        const cards = cur().customTables.map((tb, i) => {
+            const rows = tb.rows.map((_, j) => {
+                const base = `customTables.${i}.rows.${j}`;
+                return `<tr><td class="lbl">${plain(base + '.a', String(j + 1))}</td><td>${val(base + '.b')}</td></tr>`;
+            }).join('');
+            return `<div class="ct-card" data-ct="${i}">
+                <div class="ct-head">
+                    <input type="text" class="ct-title" data-path="customTables.${i}.title" value="${esc(tb.title)}" aria-label="${esc(t('Titolo della tabella'))}" autocomplete="off"/>
+                    <button type="button" class="ct-del" data-ct-act="del" aria-label="${esc(t('Elimina tabella'))}" title="${esc(t('Elimina tabella'))}">🗑</button>
+                </div>
+                <table class="grid"><colgroup><col class="c-lbl"><col></colgroup>${rows}</table>
+                <div class="ct-rows">
+                    <button type="button" data-ct-act="rowAdd" ${tb.rows.length >= CT_MAX_ROWS ? 'disabled' : ''}>${t('＋ Riga')}</button>
+                    <button type="button" data-ct-act="rowDel" ${tb.rows.length <= 1 ? 'disabled' : ''}>${t('− Riga')}</button>
+                </div>
             </div>`;
+        }).join('');
+        return `<div class="ct-area">
+            ${cards ? `<div class="ct-grid">${cards}</div>` : ''}
+            <button type="button" class="btn btn-outline" data-ct-act="new">${t('➕ Aggiungi tabella')}</button>
+        </div>`;
+    }
+    function redrawBoard() {
+        clearSel();
+        board.innerHTML = buildBoard(true);
+        save();
+    }
+    function addCustomTable() {
+        const d = cur();
+        openEditor({
+            title: t('Nuova tabella'),
+            nameLabel: t('Titolo'), name: t('TABELLA') + ' ' + (d.customTables.length + 1), noList: true,
+            onSave: (num, name) => {
+                d.customTables.push({
+                    id: 't' + Date.now().toString(36),
+                    title: (name || t('TABELLA') + ' ' + (d.customTables.length + 1)).toUpperCase(),
+                    rows: [{ a: '', b: '' }, { a: '', b: '' }, { a: '', b: '' }]
+                });
+            }
+        });
     }
 
     // Elenchi dei nomi che compaiono toccando una cella:
@@ -1513,6 +1611,30 @@
     board.addEventListener('change', (e) => {
         if (e.target.dataset.path && isNum(e.target)) commitInputs([e.target]);
         else applyRosterNumber(e.target);
+    });
+
+    board.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-ct-act]');
+        if (!btn) return;
+        const act = btn.dataset.ctAct;
+        if (act === 'new') { addCustomTable(); return; }
+        const d = cur();
+        const i = +btn.closest('.ct-card').dataset.ct;
+        const tb = d.customTables[i];
+        if (!tb) return;
+        if (act === 'del') {
+            if (!confirm(t('Eliminare la tabella "{t}"?', { t: tb.title }))) return;
+            d.customTables.splice(i, 1);
+        } else if (act === 'rowAdd') {
+            if (tb.rows.length >= CT_MAX_ROWS) return;
+            tb.rows.push({ a: '', b: '' });
+        } else if (act === 'rowDel') {
+            if (tb.rows.length <= 1) return;
+            const last = tb.rows[tb.rows.length - 1];
+            if ((last.a.trim() || last.b.trim()) && !confirm(t('L’ultima riga contiene del testo. Eliminarla?'))) return;
+            tb.rows.pop();
+        }
+        redrawBoard();
     });
 
     // Nome scelto nella Formazione che è nel roster: la riga prende il suo
@@ -3684,6 +3806,31 @@
             </div>`;
     }
 
+    // Distribuisce le tabelle su 3 colonne per pagina senza mai spezzarle:
+    // ognuna va nella colonna più libera; se non entra, si apre una nuova pagina.
+    function customTablePages() {
+        const CT_ROW = 28, CT_EXTRA = 40, CT_COL_H = 640, CT_COLS = 3;
+        const pages = [];
+        let cols = null;
+        cur().customTables.forEach(tb => {
+            const h = CT_EXTRA + tb.rows.length * CT_ROW;
+            let col = cols && cols.reduce((a, c) => (c.used < a.used ? c : a));
+            if (!col || col.used + h > CT_COL_H) {
+                cols = Array.from({ length: CT_COLS }, () => ({ used: 0, tables: [] }));
+                pages.push(cols);
+                col = cols[0];
+            }
+            col.tables.push(tb);
+            col.used += h;
+        });
+        return pages.map(p => p.map(c => c.tables));
+    }
+    function customTableSheet(tb) {
+        const rows = tb.rows.map((r, j) =>
+            `<tr><td class="lbl"><span class="v">${esc(r.a.trim() || String(j + 1))}</span></td><td><span class="v">${esc(r.b)}</span></td></tr>`).join('');
+        return `<div><div class="block-title">${esc(tb.title)}</div><table class="grid"><colgroup><col class="c-lbl"><col></colgroup>${rows}</table></div>`;
+    }
+
     function buildSheet() {
         sheet.innerHTML = sheetHead(t('POSIZIONAMENTI')) + `<div class="sh-board">${buildBoard(false)}</div>`;
 
@@ -3710,6 +3857,11 @@
         // poi una pagina per ogni schema personalizzato
         $('extraFrames').innerHTML = (cur().customSchemes || []).map(c =>
             `<div class="preview-frame"><div class="sheet sp-sheet">${sheetHead(esc(c.title))}<div class="sh-sp">${spSVG(c.id, true)}</div></div></div>`).join('');
+        // infine le tabelle personalizzate, se ci sono
+        $('extraFrames').insertAdjacentHTML('beforeend', customTablePages().map(cols =>
+            `<div class="preview-frame"><div class="sheet">${sheetHead(t('TABELLE PERSONALIZZATE'))}<div class="sh-tables">${
+                cols.map(col => `<div class="sh-col">${col.map(customTableSheet).join('')}</div>`).join('')
+            }</div></div></div>`).join(''));
         // firma dell'allenatore in fondo a ogni pagina
         if (coachName) {
             scaler.querySelectorAll('.sheet').forEach(sh => {
@@ -3750,8 +3902,10 @@
     // che non servono. Si riparte da tutte a ogni apertura dell'anteprima.
     let skipPages = new Set();
     function pageNames() {
+        const tablePages = customTablePages().length;
         return [t('Scheda'), t('Schieramento')].concat(spKinds().map(k => k.custom ? k.title
-            : (k.title.charAt(0) + k.title.slice(1).toLowerCase()).replace(/ (dx|sx)$/, m => m.toUpperCase())));
+            : (k.title.charAt(0) + k.title.slice(1).toLowerCase()).replace(/ (dx|sx)$/, m => m.toUpperCase())),
+            customTablePages().map((_, i) => t('Tabelle personalizzate') + (tablePages > 1 ? ' ' + (i + 1) : '')));
     }
     function renderPagePick() {
         const frames = [...scaler.querySelectorAll('.preview-frame')];
