@@ -206,7 +206,8 @@
             grid-template-columns: 1.15fr 1fr 1fr;
             gap: 28px;
         }
-        .col { display: flex; flex-direction: column; gap: 22px; }
+        .col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+        .board { align-items: start; }
         .block-title {
             text-align: center;
             font-size: 14px;
@@ -224,7 +225,7 @@
         }
         table.grid td {
             border: 1px solid var(--line);
-            height: 38px;
+            height: calc(38px + var(--rx, 0px));
             padding: 0;
             vertical-align: middle;
         }
@@ -251,7 +252,7 @@
         table.grid input {
             width: 100%;
             height: 100%;
-            min-height: 37px;
+            min-height: calc(37px + var(--rx, 0px));
             border: none;
             background: transparent;
             padding: 6px 10px;
@@ -284,14 +285,15 @@
         .toast.show { opacity: 1; transform: translate(-50%, 0); }
         .note-box textarea {
             width: 100%;
-            min-height: 170px;
+            min-height: 120px;
             border: 1px solid var(--line);
             border-top: none;
             padding: 10px 12px;
             font-size: 15px;
             font-family: inherit;
-            resize: vertical;
+            resize: none;
             color: #1a1a1a;
+            display: block;
         }
         .note-box textarea:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -482,8 +484,7 @@
         }
 
         /* ---- TABELLE PERSONALIZZATE ---- */
-        .ct-area { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 18px; }
-        .ct-grid { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 22px 28px; align-items: start; }
+        .ct-area { grid-column: 1 / -1; display: flex; justify-content: center; }
         .ct-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
         .ct-title {
             flex: 1; min-width: 0; text-align: center; font: inherit; font-size: 14px; font-weight: 800; letter-spacing: 0.4px;
@@ -729,13 +730,11 @@
             table.grid td.n, table.grid col.c-n { width: 44px; }
         }
         @media (max-width: 900px) {
-            .board { grid-template-columns: 1fr 1fr; }
-            .board .col:first-child { grid-row: span 2; }
         }
         /* Touch (telefoni Android, iPad): bersagli più grandi */
         @media (pointer: coarse) {
-            table.grid td { height: 44px; }
-            table.grid input { min-height: 43px; }
+            table.grid td { height: calc(44px + var(--rx, 0px)); }
+            table.grid input { min-height: calc(43px + var(--rx, 0px)); }
             .btn { min-height: 46px; }
         }
         @media (max-width: 760px) {
@@ -763,8 +762,6 @@
             .page-pick { flex-wrap: nowrap; overflow-x: auto; padding: 8px 12px; font-size: 12.5px; }
             .page-pick label, .page-pick > span, .page-pick button { flex: none; white-space: nowrap; }
             .modal-body { padding: 14px 8px; }
-            .board { grid-template-columns: 1fr; }
-            .board .col:first-child { grid-row: auto; }
             .actions, .actions .left { flex-direction: column; align-items: stretch; }
         }
     </style>
@@ -1471,8 +1468,24 @@
             ? `<textarea data-path="note" placeholder="${t('Indicazioni, consegne, palle inattive particolari…')}">${esc(d.note)}</textarea>`
             : `<div class="note-text">${esc(d.note)}</div>`;
 
-        const colCls = editable ? 'col' : 'sh-col';
-        const fillCls = editable ? 'col' : 'sh-col fill';
+        // Nell'app ogni tabella è un blocco a sé: layoutBoard() li incastra
+        // nelle colonne. Il foglio PDF mantiene le sue tre colonne fisse.
+        if (editable) {
+            const blocks = [
+                `${title(t('FORMAZIONE'))}${tbl('n', form)}`,
+                `${title(t('CALCI D’ANGOLO CONTRO'))}${tbl('lbl', cc)}`,
+                `${title(t('CALCI D’ANGOLO A FAVORE'))}${tbl('lbl', cf)}`,
+                `${title(t('PUNIZIONE CENTRALE'))}${tbl('n', pc)}`,
+                `<div class="note-box"><table class="grid"><tr><td class="sub">${t('NOTE')}</td></tr></table>${note}</div>`,
+                `${title(t('PUNIZIONI LATERALI DX'))}${tbl('n', pun('punDx'))}`,
+                `${title(t('PUNIZIONI LATERALI SX'))}${tbl('n', pun('punSx'))}`,
+                `${title(t('CALCI DI RIGORE'))}${tbl('n', rig)}`
+            ].concat(customTableCards(val, plain));
+            return blocks.map((h, i) => `<div class="blk${i === 4 ? ' blk-note' : ''}" data-ord="${i}">${h}</div>`).join('') +
+                `<div class="ct-area"><button type="button" class="btn btn-outline" data-ct-act="new">${t('➕ Aggiungi tabella')}</button></div>`;
+        }
+        const colCls = 'sh-col';
+        const fillCls = 'sh-col fill';
         return `
             <div class="${fillCls}">
                 <div>${title(t('FORMAZIONE'))}${tbl('n', form)}</div>
@@ -1487,15 +1500,15 @@
                 <div>${title(t('PUNIZIONI LATERALI DX'))}${tbl('n', pun('punDx'))}</div>
                 <div>${title(t('PUNIZIONI LATERALI SX'))}${tbl('n', pun('punSx'))}</div>
                 <div class="pen">${title(t('CALCI DI RIGORE'))}${tbl('n', rig)}</div>
-            </div>${editable ? customTablesEditor(val, plain) : ''}`;
+            </div>`;
     }
 
     // ---- TABELLE PERSONALIZZATE ----
     // Si scrivono sotto le tabelle fisse: le celle sono normali celle del
     // tabellone, quindi valgono frecce, selezione e copia/incolla.
     const CT_MAX_ROWS = 20;
-    function customTablesEditor(val, plain) {
-        const cards = cur().customTables.map((tb, i) => {
+    function customTableCards(val, plain) {
+        return cur().customTables.map((tb, i) => {
             const rows = tb.rows.map((_, j) => {
                 const base = `customTables.${i}.rows.${j}`;
                 return `<tr><td class="lbl">${plain(base + '.a', String(j + 1))}</td><td>${val(base + '.b')}</td></tr>`;
@@ -1511,17 +1524,111 @@
                     <button type="button" data-ct-act="rowDel" ${tb.rows.length <= 1 ? 'disabled' : ''}>${t('− Riga')}</button>
                 </div>
             </div>`;
-        }).join('');
-        return `<div class="ct-area">
-            ${cards ? `<div class="ct-grid">${cards}</div>` : ''}
-            <button type="button" class="btn btn-outline" data-ct-act="new">${t('➕ Aggiungi tabella')}</button>
-        </div>`;
+        });
     }
     function redrawBoard() {
         clearSel();
-        board.innerHTML = buildBoard(true);
+        drawBoard();
         save();
     }
+
+    // ---- DISPOSIZIONE A INCASTRO DELLE TABELLE ----
+    // Le colonne dipendono dalla larghezza (1 sul telefono, fino a 4 su uno
+    // schermo largo). Le tabelle restano nell'ordine del foglio e si dividono
+    // fra le colonne nel modo più bilanciato; le note vanno nella colonna più
+    // corta. Poi ogni colonna si allunga fino alla più alta: le note crescono,
+    // nelle altre colonne le righe si alzano di qualche pixel. Così le
+    // colonne finiscono tutte alla stessa altezza.
+    const BOARD_COL_MIN = 290, BOARD_ROW_MAX_EXTRA = 16;
+    let boardLayoutKey = '';
+    function drawBoard() {
+        board.innerHTML = buildBoard(true);
+        boardLayoutKey = '';
+        layoutBoard();
+    }
+    // tutte le divisioni in colonne consecutive: si sceglie quella con la
+    // colonna più alta più bassa possibile (a pari merito, la più pareggiata)
+    function bestSplit(heights, noteH, n, gap) {
+        const k = heights.length;
+        let best = null;
+        const colH = (from, to) => {
+            let h = 0;
+            for (let i = from; i < to; i++) h += heights[i] + (i > from ? gap : 0);
+            return h;
+        };
+        const tryCuts = (cuts) => {
+            const bounds = [0, ...cuts, k];
+            const hs = bounds.slice(0, -1).map((f, i) => colH(f, bounds[i + 1]));
+            const noteCol = hs.indexOf(Math.min(...hs));
+            hs[noteCol] += (hs[noteCol] ? gap : 0) + noteH;
+            const max = Math.max(...hs);
+            const spread = hs.reduce((acc, h) => acc + (max - h), 0);
+            if (!best || max < best.max - 0.5 || (Math.abs(max - best.max) <= 0.5 && spread < best.spread)) {
+                best = { bounds, noteCol, max, spread };
+            }
+        };
+        const rec = (start, left, cuts) => {
+            if (left === 0) { tryCuts(cuts); return; }
+            for (let c = start + 1; c <= k - left; c++) rec(c, left - 1, cuts.concat(c));
+        };
+        rec(0, Math.min(n, k) - 1, []);
+        return best;
+    }
+    function layoutBoard() {
+        const blocks = [...board.querySelectorAll('.blk')].sort((a, b) => a.dataset.ord - b.dataset.ord);
+        if (!blocks.length) return;
+        const gap = parseFloat(getComputedStyle(board).columnGap) || 0;
+        const n = Math.max(1, Math.min(4, Math.floor((board.clientWidth + gap) / (BOARD_COL_MIN + gap))));
+        const key = n + ':' + board.clientWidth + ':' + blocks.length;
+        const noteBlk = blocks.find(b => b.classList.contains('blk-note'));
+        const tables = blocks.filter(b => b !== noteBlk);
+        const area = board.querySelector('.ct-area');
+        let cols = [...board.querySelectorAll(':scope > .col')];
+        if (key === boardLayoutKey && cols.length === n) { equalizeColumns(cols, noteBlk); return; }
+        boardLayoutKey = key;
+        const focused = document.activeElement;
+        if (cols.length !== n) {
+            cols.forEach(c => c.remove());
+            cols = Array.from({ length: n }, () => { const c = document.createElement('div'); c.className = 'col'; return c; });
+            cols.forEach(c => board.insertBefore(c, area));
+            board.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
+        }
+        // misure senza allungamenti, alla larghezza di una colonna
+        cols.forEach(c => c.style.removeProperty('--rx'));
+        if (noteBlk) noteBlk.querySelector('textarea').style.height = '';
+        blocks.forEach(b => { if (b.parentNode !== cols[0]) cols[0].appendChild(b); });
+        const colGap = parseFloat(getComputedStyle(cols[0]).rowGap) || 0;
+        const best = bestSplit(tables.map(b => b.offsetHeight), noteBlk ? noteBlk.offsetHeight : 0, n, colGap);
+        best.bounds.slice(0, -1).forEach((from, i) => {
+            tables.slice(from, best.bounds[i + 1]).forEach(b => cols[i].appendChild(b));
+        });
+        if (noteBlk) cols[Math.min(best.noteCol, cols.length - 1)].appendChild(noteBlk);
+        if (focused && board.contains(focused) && document.activeElement !== focused) focused.focus({ preventScroll: true });
+        equalizeColumns(cols, noteBlk);
+    }
+    function equalizeColumns(cols, noteBlk) {
+        cols.forEach(c => c.style.removeProperty('--rx'));
+        if (noteBlk) noteBlk.querySelector('textarea').style.height = '';
+        if (cols.length < 2) return;
+        const target = Math.max(...cols.map(c => c.offsetHeight));
+        cols.forEach(c => {
+            const extra = target - c.offsetHeight;
+            if (extra <= 0) return;
+            if (noteBlk && noteBlk.parentNode === c) {
+                const ta = noteBlk.querySelector('textarea');
+                ta.style.height = (ta.offsetHeight + extra) + 'px';
+                return;
+            }
+            const rows = c.querySelectorAll('table.grid tr').length;
+            if (!rows) return;
+            c.style.setProperty('--rx', Math.min(BOARD_ROW_MAX_EXTRA, Math.round(extra / rows * 100) / 100).toFixed(2) + 'px');
+        });
+    }
+    let boardResizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(boardResizeTimer);
+        boardResizeTimer = setTimeout(layoutBoard, 120);
+    });
     function addCustomTable() {
         const d = cur();
         openEditor({
@@ -1576,7 +1683,7 @@
         document.querySelectorAll('#modeToggle button').forEach(b => b.classList.toggle('active', b.dataset.mode === state.mode));
         document.querySelectorAll('[data-meta]').forEach(el => { el.value = state.meta[el.dataset.meta] || ''; });
         renderFormationOptions();
-        board.innerHTML = buildBoard(true);
+        drawBoard();
         updatePlayersList();
         updateStatus();
         renderPitch();
